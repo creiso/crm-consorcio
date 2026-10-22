@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-const LABEL = { aguardando: "Aguardando pagamento", concluido: "Pagamento concluído", cancelado: "Cancelado" } as const;
+const LABEL = { aguardando: "⏳ Aguardando pagamento", concluido: "✓ Pagamento concluído", cancelado: "✕ Cancelado" } as const;
 type P = keyof typeof LABEL;
 const NEXT: Record<P, P> = { aguardando: "concluido", concluido: "cancelado", cancelado: "aguardando" };
 

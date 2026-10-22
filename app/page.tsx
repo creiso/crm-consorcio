@@ -1,102 +1,67 @@
-import { db, brl } from "@/lib/supabase";
-import PagamentoTag from "./PagamentoTag";
-import { exigirPerfil } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { db, STATUSES } from "@/lib/supabase";
+import { exigirPerfil } from "@/lib/auth";
+import { intervaloMes, mesAnterior, mesAtualBR, nomeMes, hojeBR, diaBR, vendasEntre, validas, soma, ranking } from "@/lib/painel";
+import DashboardView from "./DashboardView";
+import type { Dia } from "./VendasPorDia";
 
 export const dynamic = "force-dynamic";
 
-type Venda = {
-  id: string; valor: number; tipo: string; grupo: string | null; cota: string | null;
-  pagamento: "aguardando" | "concluido" | "cancelado"; created_at: string;
-  leads: { nome: string } | null; vendedores: { nome: string } | null;
-};
-
-const ICONE: Record<string, string> = { imovel: "🏠", automovel: "🚗", servicos: "🛠️" };
-
 export default async function Dashboard({ searchParams }: { searchParams: { mes?: string } }) {
-  const mes = searchParams.mes ?? new Date().toISOString().slice(0, 7); // AAAA-MM
-  const inicio = new Date(`${mes}-01T00:00:00`);
-  const fim = new Date(inicio.getFullYear(), inicio.getMonth() + 1, 1);
-
   const perfil = await exigirPerfil();
   if (perfil.papel !== "admin") redirect("/kanban"); // vendedor só usa o kanban
-  const admin = true;
+
+  const mes = /^\d{4}-\d{2}$/.test(searchParams.mes ?? "") ? searchParams.mes! : mesAtualBR();
+  const mesAnt = mesAnterior(mes);
+  const atual = intervaloMes(mes);
+  const ant = intervaloMes(mesAnt);
 
   const supa = db();
-  const vendasQ = supa.from("vendas")
-    .select("*, leads(nome), vendedores(nome)")
-    .gte("created_at", inicio.toISOString()).lt("created_at", fim.toISOString())
-    .order("created_at", { ascending: false });
-  const leadsQ = supa.from("leads").select("id", { count: "exact", head: true })
-    .gte("created_at", inicio.toISOString()).lt("created_at", fim.toISOString());
-  // vendedor só enxerga os próprios números
-  if (!admin) { vendasQ.eq("vendedor_id", perfil.id); leadsQ.eq("vendedor_id", perfil.id); }
-  const [{ data }, leadsMes] = await Promise.all([vendasQ, leadsQ]);
-  const vendas = ((data ?? []) as Venda[]).filter((v) => v.pagamento !== "cancelado");
+  const contarLeads = (i: { inicio: Date; fim: Date }, status?: string) => {
+    const q = supa.from("leads").select("id", { count: "exact", head: true })
+      .gte("created_at", i.inicio.toISOString()).lt("created_at", i.fim.toISOString());
+    if (status) q.eq("status", status);
+    return q.then((r) => r.count ?? 0);
+  };
 
-  const total = vendas.reduce((s, v) => s + Number(v.valor), 0);
-  const recebido = vendas.filter((v) => v.pagamento === "concluido").reduce((s, v) => s + Number(v.valor), 0);
-  const conversao = leadsMes.count ? (vendas.length / leadsMes.count) * 100 : 0;
+  const [vendasMes, vendasAnt, leadsMes, leadsAnt, ...porEtapa] = await Promise.all([
+    vendasEntre(atual.inicio, atual.fim),
+    vendasEntre(ant.inicio, ant.fim),
+    contarLeads(atual),
+    contarLeads(ant),
+    ...STATUSES.map((s) => contarLeads(atual, s.id)),
+  ]);
 
-  const porVendedor = Object.entries(
-    vendas.reduce<Record<string, { total: number; qtd: number }>>((acc, v) => {
-      const n = v.vendedores?.nome ?? "—";
-      acc[n] = { total: (acc[n]?.total ?? 0) + Number(v.valor), qtd: (acc[n]?.qtd ?? 0) + 1 };
-      return acc;
-    }, {})
-  ).sort((a, b) => b[1].total - a[1].total);
-  const max = porVendedor[0]?.[1].total ?? 1;
+  const ok = validas(vendasMes);
+  const okAnt = validas(vendasAnt);
+  const volume = soma(ok), volumeAnt = soma(okAnt);
+  const ehMesAtual = mes === mesAtualBR();
+  const vendasHoje = ehMesAtual ? ok.filter((v) => diaBR(v.created_at) === hojeBR()) : [];
+
+  // série diária do mês (dias sem venda entram zerados)
+  const [y, m] = mes.split("-").map(Number);
+  const mesCurto = nomeMes(mes, true).toLowerCase();
+  const dias: Dia[] = Array.from({ length: new Date(Date.UTC(y, m, 0)).getUTCDate() },
+    (_, i) => ({ dia: i + 1, rotulo: `${i + 1} ${mesCurto}`, total: 0, qtd: 0 }));
+  for (const v of ok) {
+    const d = dias[Number(diaBR(v.created_at).slice(8, 10)) - 1];
+    if (d) { d.total += Number(v.valor); d.qtd += 1; }
+  }
 
   return (
-    <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1>{admin ? "Dashboard de vendas" : `Olá, ${perfil.nome}`}</h1>
-        <form>
-          <input type="month" name="mes" defaultValue={mes} style={{ width: 180 }} />{" "}
-          <button className="btn secondary">Filtrar</button>
-        </form>
-      </div>
-
-      <div className="kpis">
-        <div className="card kpi"><div className="l">Volume vendido</div><div className="v">{brl(total)}</div></div>
-        <div className="card kpi"><div className="l">Pagamento concluído</div><div className="v">{brl(recebido)}</div></div>
-        <div className="card kpi"><div className="l">Cotas vendidas</div><div className="v">{vendas.length}</div></div>
-        <div className="card kpi"><div className="l">Ticket médio</div><div className="v">{brl(vendas.length ? total / vendas.length : 0)}</div></div>
-        <div className="card kpi"><div className="l">Conversão (leads do mês)</div><div className="v">{conversao.toFixed(1)}%</div></div>
-      </div>
-
-      <div className="grid2">
-        <div className="card">
-          <h3 style={{ marginTop: 0 }}>Ranking de vendedores</h3>
-          {porVendedor.length === 0 && <p style={{ color: "#666" }}>Sem vendas no período.</p>}
-          {porVendedor.map(([nome, r]) => (
-            <div key={nome} style={{ marginBottom: 14 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
-                <span>{nome} <small style={{ color: "#666" }}>({r.qtd})</small></span><b>{brl(r.total)}</b>
-              </div>
-              <div className="bar" style={{ width: `${(r.total / max) * 100}%` }} />
-            </div>
-          ))}
-        </div>
-
-        <div className="card">
-          <h3 style={{ marginTop: 0 }}>Vendas recentes</h3>
-          {(data as Venda[] | null)?.length ? (data as Venda[]).map((v) => (
-            <div key={v.id} className="sale">
-              <div className="ico">{ICONE[v.tipo] ?? "📄"}</div>
-              <div style={{ flex: 1 }}>
-                <div className="name">{v.leads?.nome}</div>
-                <div className="meta">
-                  {v.grupo && `Grupo ${v.grupo}`}{v.cota && ` / Cota ${v.cota}`} · Vendedor: {v.vendedores?.nome} ·{" "}
-                  {new Date(v.created_at).toLocaleDateString("pt-BR")}
-                </div>
-                <div className="val">{brl(Number(v.valor))}</div>
-                <PagamentoTag id={v.id} value={v.pagamento} editavel={admin} />
-              </div>
-            </div>
-          )) : <p style={{ color: "#666" }}>Nenhuma venda no período.</p>}
-        </div>
-      </div>
-    </>
+    <DashboardView
+      mes={mes} mesAnt={mesAnt} ehMesAtual={ehMesAtual}
+      volume={volume} volumeAnt={volumeAnt}
+      concluido={soma(ok.filter((v) => v.pagamento === "concluido"))}
+      concluidoAnt={soma(okAnt.filter((v) => v.pagamento === "concluido"))}
+      cotas={ok.length} cotasAnt={okAnt.length}
+      ticket={ok.length ? volume / ok.length : 0} ticketAnt={okAnt.length ? volumeAnt / okAnt.length : 0}
+      conversao={leadsMes ? (ok.length / leadsMes) * 100 : 0} conversaoAnt={leadsAnt ? (okAnt.length / leadsAnt) * 100 : 0}
+      hojeTotal={soma(vendasHoje)} hojeQtd={vendasHoje.length}
+      dias={dias} hoje={ehMesAtual ? Number(hojeBR().slice(8, 10)) : null}
+      placar={await ranking(vendasMes)}
+      etapas={STATUSES.map((s, i) => ({ id: s.id, label: s.label, qtd: porEtapa[i] }))} leadsMes={leadsMes}
+      vendas={vendasMes}
+    />
   );
 }

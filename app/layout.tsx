@@ -18,6 +18,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <span className="marca">CRM Consórcio</span>
             {perfil.papel === "admin" && <Link href="/">Dashboard</Link>}
             <Link href="/kanban">Kanban</Link>
+            {perfil.papel === "admin" && <Link href="/placar">Placar</Link>}
             {perfil.papel === "admin" && <Link href="/importar">Planilhas</Link>}
             {perfil.papel === "admin" && <Link href="/usuarios">Usuários</Link>}
             <Link href="/perfil" className="eu" title="Meu perfil">

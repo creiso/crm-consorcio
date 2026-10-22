@@ -1,0 +1,113 @@
+/* Placar para TV: tema escuro próprio, medidas em vh para escalar em qualquer tela. */
+.placar {
+  --pl-bg: #0d0e10; --pl-card: #17181b; --pl-line: #26282d; --pl-text: #f0efec; --pl-muted: #a3a19a;
+  --pl-serie: #3987e5; --pl-ouro: #f5c242; --pl-prata: #c9ced6; --pl-bronze: #d08a4f; --pl-bom: #0ca30c;
+  position: fixed; inset: 0; z-index: 100; background: radial-gradient(1200px 600px at 50% -10%, #1b2433 0%, var(--pl-bg) 60%);
+  color: var(--pl-text); display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 2.5vh; padding: 3vh 3vw;
+  overflow: hidden; font-size: 2vh; letter-spacing: -0.01em;
+}
+.placar.ocioso { cursor: none; }
+
+.pl-topo { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 2vw; }
+.pl-marca { font-size: 3.4vh; font-weight: 700; letter-spacing: -0.03em; }
+.pl-sub { color: var(--pl-muted); font-size: 2.2vh; margin-top: .4vh; }
+.pl-total { text-align: center; display: grid; gap: .3vh; }
+.pl-total span { color: var(--pl-muted); font-size: 1.9vh; text-transform: uppercase; letter-spacing: .08em; font-weight: 600; }
+.pl-total strong { font-size: 7vh; font-weight: 800; letter-spacing: -0.04em; line-height: 1; }
+.pl-total em { font-style: normal; color: var(--pl-muted); font-size: 2vh; }
+.pl-dir { justify-self: end; text-align: right; }
+.pl-relogio { font-size: 5vh; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+.pl-vivo { color: var(--pl-bom); font-size: 1.8vh; display: inline-flex; align-items: center; gap: .6vh; margin-top: .8vh; font-weight: 600; }
+.pl-vivo i { width: 1vh; height: 1vh; border-radius: 50%; background: currentColor; animation: pl-pulsa 2s infinite; }
+.pl-vivo.off { color: var(--pl-muted); }
+
+.pl-corpo { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); gap: 2.5vw; min-height: 0; }
+.pl-ranking { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 3vh; min-height: 0; }
+
+/* pódio */
+.pl-podio { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1fr); align-items: end; gap: 1.5vw; max-width: 64vw; width: 100%; justify-self: center; }
+.pl-podio:has(.pl-degrau:nth-child(2):last-child) { grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); max-width: 44vw; }
+.pl-podio:has(.pl-degrau:only-child) { grid-template-columns: minmax(0, 1fr); max-width: 26vw; }
+.pl-degrau { display: flex; flex-direction: column; align-items: center; text-align: center; position: relative; animation: pl-entra .5s ease-out; min-width: 0; }
+.pl-foto { position: relative; border-radius: 50%; padding: .6vh; border: .55vh solid var(--pl-prata); margin-bottom: 1.2vh; }
+.p1 .pl-foto { border-color: var(--pl-ouro); box-shadow: 0 0 5vh rgba(245, 194, 66, .25); }
+.p3 .pl-foto { border-color: var(--pl-bronze); }
+.pl-medalha { position: absolute; right: -.6vh; bottom: -.6vh; font-size: 4.2vh; line-height: 1; filter: drop-shadow(0 .4vh .6vh rgba(0, 0, 0, .5)); }
+.p1 .pl-medalha { font-size: 5.4vh; }
+.pl-nome { font-size: 2.5vh; font-weight: 650; max-width: 100%; line-height: 1.2; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.p1 .pl-nome { font-size: 3vh; }
+.pl-valor { font-size: 3.4vh; font-weight: 800; letter-spacing: -0.03em; margin-top: .3vh; }
+.p1 .pl-valor { font-size: 4.4vh; color: var(--pl-ouro); }
+.pl-qtd { color: var(--pl-muted); font-size: 1.8vh; margin-bottom: 1.2vh; }
+.pl-base { width: 100%; background: linear-gradient(180deg, #23252a, var(--pl-card)); border: 1px solid var(--pl-line); border-bottom: 0;
+  border-radius: 1.2vh 1.2vh 0 0; display: grid; place-items: center; font-size: 4vh; font-weight: 800; color: var(--pl-muted); }
+.p1 .pl-base { height: 10vh; color: var(--pl-ouro); }
+.p2 .pl-base { height: 6.5vh; }
+.p3 .pl-base { height: 4.5vh; }
+.pl-subiu { position: absolute; top: -1vh; right: 8%; background: var(--pl-bom); color: #fff; font-size: 1.6vh; font-weight: 700;
+  padding: .3vh 1vh; border-radius: 2vh; animation: pl-entra .4s ease-out; z-index: 1; }
+.pl-subiu.mini { position: static; margin-left: 1vh; padding: .1vh .8vh; }
+
+/* demais posições: uma cor para todas as barras, valor na ponta */
+.pl-lista { background: var(--pl-card); border: 1px solid var(--pl-line); border-radius: 1.6vh; padding: 1vh 1.6vw; align-self: start; }
+.pl-linha { display: grid; grid-template-columns: 3.2vw 5.2vh minmax(0, 1fr) auto 8vw; gap: 1.2vw; align-items: center; padding: .9vh 0; border-bottom: 1px solid var(--pl-line); }
+.pl-linha:last-of-type { border-bottom: 0; }
+.pl-pos { color: var(--pl-muted); font-weight: 700; font-size: 2.2vh; font-variant-numeric: tabular-nums; }
+.pl-linha-nome { font-size: 2.2vh; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; }
+.pl-trilho { height: .8vh; margin-top: .7vh; }
+.pl-barra { height: 100%; min-width: 2px; background: var(--pl-serie); border-radius: 0 .5vh .5vh 0; transition: width .6s ease; }
+.pl-linha-valor { font-size: 2.4vh; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pl-linha-qtd { color: var(--pl-muted); font-size: 1.8vh; text-align: right; white-space: nowrap; }
+.pl-mais { color: var(--pl-muted); font-size: 1.8vh; padding-top: .8vh; text-align: center; }
+
+/* últimas vendas */
+.pl-ultimas { background: var(--pl-card); border: 1px solid var(--pl-line); border-radius: 1.6vh; padding: 2vh 1.6vw; min-height: 0; overflow: hidden; }
+.pl-ultimas h2 { margin: 0 0 1.4vh; font-size: 2.2vh; color: var(--pl-muted); text-transform: uppercase; letter-spacing: .08em; font-weight: 600; }
+.pl-venda { display: grid; grid-template-columns: 6vh minmax(0, 1fr) auto; gap: 1vw; align-items: center; padding: 1.1vh 0; border-bottom: 1px solid var(--pl-line); }
+.pl-venda:last-child { border-bottom: 0; }
+.pl-venda.nova { animation: pl-destaque 2.5s ease-out; border-radius: 1vh; }
+.pl-venda-nome { font-size: 2.2vh; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-venda-det { color: var(--pl-muted); font-size: 1.7vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: .3vh; }
+.pl-venda-valor { font-size: 2.5vh; font-weight: 750; white-space: nowrap; }
+
+.pl-vazio { display: grid; place-items: center; text-align: center; color: var(--pl-muted); font-size: 3vh; line-height: 1.5; padding: 6vh 0; }
+.pl-vazio.mini { font-size: 2vh; padding: 3vh 0; }
+
+/* controles: somem quando o mouse fica parado */
+.pl-controles { position: absolute; bottom: 2.5vh; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; align-items: center;
+  background: rgba(23, 24, 27, .92); border: 1px solid var(--pl-line); padding: 8px; border-radius: 14px; transition: opacity .3s; z-index: 5; }
+.ocioso .pl-controles { opacity: 0; pointer-events: none; }
+.pl-seg { display: flex; background: #0d0e10; border-radius: 10px; padding: 3px; }
+.pl-btn { font: inherit; font-size: 14px; font-weight: 600; background: transparent; color: var(--pl-text); border: 1px solid transparent;
+  border-radius: 9px; padding: 8px 14px; cursor: pointer; text-decoration: none; white-space: nowrap; }
+.pl-controles > .pl-btn { border-color: var(--pl-line); background: #222429; }
+.pl-btn:hover { background: #2b2e34; }
+.pl-btn.on { background: var(--pl-text); color: #0d0e10; }
+
+/* comemoração de venda nova */
+.pl-festa { position: absolute; inset: 0; z-index: 10; display: grid; place-items: center; background: rgba(5, 6, 8, .72); backdrop-filter: blur(6px); animation: pl-fade .4s ease-out; }
+.pl-festa-card { display: flex; flex-direction: column; align-items: center; gap: 1.4vh; text-align: center; animation: pl-pop .6s cubic-bezier(.2, 1.4, .4, 1); }
+.pl-festa-card .avatar { box-shadow: 0 0 0 .8vh var(--pl-ouro), 0 0 8vh rgba(245, 194, 66, .45); }
+.pl-festa-tit { font-size: 5vh; font-weight: 800; letter-spacing: -0.03em; }
+.pl-festa-nome { font-size: 4.4vh; font-weight: 700; margin-top: 1vh; }
+.pl-festa-valor { font-size: 9vh; font-weight: 800; letter-spacing: -0.04em; color: var(--pl-ouro); line-height: 1; }
+.pl-festa-det { font-size: 2.4vh; color: var(--pl-muted); }
+.pl-confete { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.pl-confete i { position: absolute; top: -3vh; width: 1vh; height: 1.8vh; border-radius: 2px; animation: pl-cai 3.2s linear infinite; opacity: .9; }
+
+@keyframes pl-pulsa { 50% { opacity: .3; } }
+@keyframes pl-entra { from { opacity: 0; transform: translateY(1.5vh); } to { opacity: 1; transform: none; } }
+@keyframes pl-destaque { 0% { background: rgba(245, 194, 66, .25); } 100% { background: transparent; } }
+@keyframes pl-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pl-pop { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: none; } }
+@keyframes pl-cai { to { transform: translateY(110vh) rotate(720deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .placar *, .placar *::before { animation: none !important; transition: none !important; }
+  .pl-confete { display: none; }
+}
+@media (max-aspect-ratio: 4/3) {
+  .pl-corpo { grid-template-columns: minmax(0, 1fr); }
+  .pl-ultimas { display: none; }
+}
