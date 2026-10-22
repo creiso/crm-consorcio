@@ -1,11 +1,12 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { STATUSES, LeadStatus, brl } from "@/lib/supabase";
+import Avatar from "../Avatar";
 
 type Lead = {
   id: string; nome: string; telefone: string | null; email: string | null; cidade: string | null;
   interesse: string | null; valor_pretendido: number | null; status: LeadStatus; observacoes: string | null;
-  created_at: string; updated_at: string; vendedor_id: string | null; vendedores: { nome: string } | null;
+  created_at: string; updated_at: string; vendedor_id: string | null; vendedores: { nome: string; foto_url: string | null } | null;
   dados_extras: Record<string, unknown> | null;
 };
 type Vendedor = { id: string; nome: string };
@@ -45,7 +46,6 @@ function whatsapp(tel: string | null) {
   return `https://wa.me/${d.length <= 11 ? "55" + d : d}`;
 }
 
-const iniciais = (nome?: string) => (nome ?? "?").split(" ").filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
 
 export default function Kanban() {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -170,7 +170,7 @@ export default function Kanban() {
                       <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         {wa && <a href={wa} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title="WhatsApp" className="ico-wa">💬</a>}
                         {l.vendedores
-                          ? <span className="avatar" title={l.vendedores.nome}>{iniciais(l.vendedores.nome)}</span>
+                          ? <Avatar nome={l.vendedores.nome} foto={l.vendedores.foto_url} />
                           : <span className="avatar vazio" title="Sem vendedor">!</span>}
                       </span>
                     </div>
@@ -255,7 +255,12 @@ function Detalhe({ lead, admin, vendedores, onClose, onStatus, onVendedor }: {
               <option value="">⚠ Sem vendedor</option>
               {vendedores.map((v) => <option key={v.id} value={v.id}>{v.nome}</option>)}
             </select>
-          ) : <b>{lead.vendedores?.nome ?? "—"}</b>}
+          ) : (
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Avatar nome={lead.vendedores?.nome} foto={lead.vendedores?.foto_url} tamanho={28} />
+              <b>{lead.vendedores?.nome ?? "—"}</b>
+            </span>
+          )}
         </section>
 
         {outros.length > 0 && (

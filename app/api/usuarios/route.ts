@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const p = await perfilApi("admin");
   if (p instanceof NextResponse) return p;
-  const { data } = await db().from("vendedores").select("id, nome, email, papel, ativo, na_roleta").order("nome");
+  const { data } = await db().from("vendedores").select("id, nome, email, papel, ativo, na_roleta, foto_url").order("nome");
   return NextResponse.json(data ?? []);
 }
 

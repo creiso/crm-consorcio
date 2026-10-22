@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 import { db } from "./supabase";
 
-export type Perfil = { id: string; nome: string; papel: "admin" | "vendedor"; email: string | null };
+export type Perfil = { id: string; nome: string; papel: "admin" | "vendedor"; email: string | null; foto_url: string | null };
 
 export function authClient() {
   const store = cookies();
@@ -23,7 +23,7 @@ export async function getPerfil(): Promise<Perfil | null> {
   const { data: { user } } = await authClient().auth.getUser();
   if (!user) return null;
   const { data } = await db().from("vendedores")
-    .select("id, nome, papel, email").eq("user_id", user.id).eq("ativo", true).maybeSingle();
+    .select("id, nome, papel, email, foto_url").eq("user_id", user.id).eq("ativo", true).maybeSingle();
   return (data as Perfil) ?? null;
 }
 

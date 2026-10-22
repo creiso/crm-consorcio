@@ -1,12 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
+import Avatar from "../Avatar";
+import FotoUpload from "../FotoUpload";
 
-type Usuario = { id: string; nome: string; email: string | null; papel: string; ativo: boolean; na_roleta: boolean };
+type Usuario = { id: string; nome: string; email: string | null; papel: string; ativo: boolean; na_roleta: boolean; foto_url: string | null };
 
 export default function Usuarios() {
   const [lista, setLista] = useState<Usuario[]>([]);
   const [f, setF] = useState({ nome: "", email: "", senha: "", papel: "vendedor" });
   const [msg, setMsg] = useState("");
+  const [fotoDe, setFotoDe] = useState<Usuario | null>(null);
 
   const load = async () => setLista(await (await fetch("/api/usuarios")).json());
   useEffect(() => { load(); }, []);
@@ -49,7 +52,15 @@ export default function Usuarios() {
             <tbody>
               {lista.map((u) => (
                 <tr key={u.id} style={{ borderTop: "1px solid #eee" }}>
-                  <td style={{ padding: 6 }}>{u.nome}</td>
+                  <td style={{ padding: 6 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <button type="button" onClick={() => setFotoDe(u)} title="Trocar foto"
+                        style={{ border: 0, padding: 0, background: "none", cursor: "pointer" }}>
+                        <Avatar nome={u.nome} foto={u.foto_url} tamanho={32} />
+                      </button>
+                      {u.nome}
+                    </span>
+                  </td>
                   <td style={{ padding: 6 }}>{u.email}</td>
                   <td style={{ padding: 6 }}>{u.papel}</td>
                   <td style={{ padding: 6 }}>
@@ -62,6 +73,15 @@ export default function Usuarios() {
           </table>
         </div>
       </div>
+      {fotoDe && (
+        <div className="modal-bg" onClick={() => setFotoDe(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: 0 }}>Foto de {fotoDe.nome}</h3>
+            <FotoUpload id={fotoDe.id} nome={fotoDe.nome} foto={fotoDe.foto_url} onChange={() => load()} />
+            <button className="btn" onClick={() => setFotoDe(null)}>Fechar</button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
