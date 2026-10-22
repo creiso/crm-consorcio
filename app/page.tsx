@@ -17,9 +17,10 @@ export default async function Dashboard({ searchParams }: { searchParams: { mes?
   const ant = intervaloMes(mesAnt);
 
   const supa = db();
+  // leads contam no mês em que foram criados de verdade (created_time da planilha), não no dia da importação
   const contarLeads = (i: { inicio: Date; fim: Date }, status?: string) => {
     const q = supa.from("leads").select("id", { count: "exact", head: true })
-      .gte("created_at", i.inicio.toISOString()).lt("created_at", i.fim.toISOString());
+      .gte("criado_em", i.inicio.toISOString()).lt("criado_em", i.fim.toISOString());
     if (status) q.eq("status", status);
     return q.then((r) => r.count ?? 0);
   };

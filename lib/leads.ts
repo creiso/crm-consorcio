@@ -2,63 +2,148 @@ import { db } from "./supabase";
 
 type Row = Record<string, unknown>;
 
-// Aceita variações comuns de cabeçalho das planilhas.
+// Cabeçalhos são comparados normalizados: sem acento, minúsculos, pontuação vira espaço.
+// "você_sabe_como_funciona_o_consórcio?" → "voce sabe como funciona o consorcio"
+export const norm = (s: string) =>
+  s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+// Padrão das planilhas (formulário de lead do Facebook/Instagram) + variações comuns.
+// A ordem dos apelidos é a prioridade quando a planilha tem mais de uma coluna parecida.
 const ALIASES: Record<string, string[]> = {
-  // inclui os nomes de coluna dos formulários de lead do Facebook/Instagram
-  id: ["id", "codigo", "lead id"],
-  nome: ["nome", "name", "cliente", "nome completo", "full name"],
-  telefone: ["telefone", "celular", "whatsapp", "phone", "phone number", "fone"],
+  id: ["id", "lead id", "codigo"],
+  criado_em: ["created time", "data de criacao", "criado em", "data do lead", "data"],
+  nome: ["nome completo", "nome", "full name", "name", "cliente"],
+  telefone: ["telefone", "phone number", "celular", "whatsapp", "phone", "fone"],
   email: ["email", "e mail", "mail"],
   cidade: ["cidade", "city"],
+  renda: ["qual sua renda mensal", "qual a sua renda mensal", "renda mensal", "renda", "salario", "faixa de renda"],
+  valor_consorcio: ["valor do consorcio", "qual o valor do consorcio", "valor da carta de credito", "valor da carta",
+    "valor do credito", "valor pretendido", "valor", "credito"],
+  conhece_consorcio: ["voce sabe como funciona o consorcio", "sabe como funciona o consorcio", "voce conhece o consorcio",
+    "conhece o consorcio", "ja conhece o consorcio", "conhece consorcio"],
+  plataforma: ["platform", "plataforma"],
+  campanha: ["campaign name", "campanha"],
+  conjunto: ["adset name", "conjunto de anuncios", "conjunto"],
+  anuncio: ["ad name", "anuncio"],
+  formulario: ["form name", "formulario"],
   interesse: ["interesse", "produto", "tipo"],
-  valor_pretendido: ["valor", "valor pretendido", "credito"],
   observacoes: ["observacoes", "obs"],
   vendedor: ["vendedor", "responsavel", "consultor"],
 };
 
-// "Nome_Completo", "nome completo" e "Nome-completo" viram a mesma coisa; acentos são ignorados.
-const norm = (s: string) =>
-  s.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase().replace(/[_\-\s]+/g, " ");
+// O texto das perguntas muda entre formulários; se o nome exato não bater, procura pelo sentido.
+const PARECIDO: Record<string, (h: string) => boolean> = {
+  renda: (h) => /\b(renda|salario)\b/.test(h),
+  valor_consorcio: (h) => /\bvalor\b/.test(h) && !/\b(renda|salario)\b/.test(h),
+  conhece_consorcio: (h) => /\bconsorcio\b/.test(h) && /\b(conhece|sabe|funciona)\b/.test(h),
+};
 
-function pick(row: Row, field: string): string | undefined {
-  for (const key of Object.keys(row)) {
-    if (ALIASES[field].includes(norm(key))) {
-      const v = row[key];
-      if (v !== null && v !== undefined && String(v).trim() !== "") return String(v).trim();
+const vazio = (v: unknown) => v === null || v === undefined || String(v).trim() === "";
+
+// Lê os campos de uma linha e anota quais colunas foram usadas (o resto vai para dados_extras).
+function leitor(row: Row) {
+  const usados = new Set<string>();
+  const cabecalhos = Object.keys(row).map((k) => [k, norm(k)] as const);
+  function pick(campo: string): unknown {
+    for (const apelido of ALIASES[campo]) {
+      const achado = cabecalhos.find(([, n]) => n === apelido);
+      if (!achado) continue;
+      usados.add(achado[0]);
+      if (!vazio(row[achado[0]])) return row[achado[0]];
+    }
+    const parecido = PARECIDO[campo];
+    if (parecido) {
+      for (const [k, n] of cabecalhos) {
+        if (usados.has(k) || !parecido(n)) continue;
+        usados.add(k);
+        if (!vazio(row[k])) return row[k];
+      }
+    }
+    return undefined;
+  }
+  const txt = (campo: string) => { const v = pick(campo); return v === undefined ? null : String(v).trim(); };
+  return { pick, txt, usados };
+}
+
+// Valor do consórcio só vira número quando é um valor único ("R$ 100.000,00", "100000", "150 mil", "1,5 milhão").
+// Faixas como "de 100 mil a 200 mil" ficam só como texto em valor_consorcio.
+export function parseValor(v: string | null) {
+  if (!v) return null;
+  let s = v.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/r\$|\s/g, "");
+  let mult = 1;
+  if (/(milhoes|milhao|mi)$/.test(s)) { mult = 1e6; s = s.replace(/(milhoes|milhao|mi)$/, ""); }
+  else if (/mil$/.test(s)) { mult = 1e3; s = s.replace(/mil$/, ""); }
+  if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(s)) s = s.replace(/\./g, "").replace(",", ".");
+  else if (/^\d+(,\d{1,2})?$/.test(s)) s = s.replace(",", ".");
+  else if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
+  const n = Number(s) * mult;
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+// created_time chega de vários jeitos: ISO do Facebook ("2026-10-20T14:33:12-03:00" ou "+0000"),
+// data brasileira ("20/10/2026 14:33") ou número de data do Excel/Sheets. Sem fuso, vale o horário de Brasília.
+export function parseData(v: unknown): string | undefined {
+  if (vazio(v)) return undefined;
+  let d: Date;
+  if (typeof v === "number") {
+    d = new Date(Math.round((v - 25569) * 86400000) + 3 * 3600000);
+  } else {
+    const s = String(v).trim();
+    const br = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+    const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (br) {
+      let [dia, mes] = [+br[1], +br[2]];
+      if (mes > 12 && dia <= 12) [dia, mes] = [mes, dia]; // veio no formato americano
+      d = new Date(Date.UTC(+br[3], mes - 1, dia, +(br[4] ?? 0) + 3, +(br[5] ?? 0), +(br[6] ?? 0)));
+    } else if (iso) {
+      d = new Date(Date.UTC(+iso[1], +iso[2] - 1, +iso[3], +(iso[4] ?? 0) + 3, +(iso[5] ?? 0), +(iso[6] ?? 0)));
+    } else {
+      d = new Date(s.replace(/([+-]\d{2})(\d{2})$/, "$1:$2"));
     }
   }
+  if (isNaN(d.getTime())) return undefined;
+  const ano = d.getUTCFullYear();
+  return ano >= 2000 && ano <= 2100 ? d.toISOString() : undefined;
 }
 
-function parseValor(v?: string) {
-  if (!v) return null;
-  const n = Number(v.replace(/[^\d,.-]/g, "").replace(/\.(?=\d{3})/g, "").replace(",", "."));
-  return Number.isFinite(n) ? n : null;
-}
-
-export function toLead(row: Row, origem: string) {
-  const nome = pick(row, "nome");
-  const telefone = pick(row, "telefone")?.replace(/\D/g, "");
-  const email = pick(row, "email")?.toLowerCase();
-  const id = pick(row, "id");
+export function lerLinha(row: Row, origem: string) {
+  const { pick, txt, usados } = leitor(row);
+  const nome = txt("nome");
+  const telefone = txt("telefone")?.replace(/\D/g, "") || null;
+  const email = txt("email")?.toLowerCase() || null;
+  const id = txt("id");
   const external_key = id ? `${origem}:${id}` : telefone ? `tel:${telefone}` : email ? `mail:${email}` : null;
   if (!nome || !external_key) return null;
 
-  const known = new Set(Object.values(ALIASES).flat());
-  const dados_extras = Object.fromEntries(Object.entries(row).filter(([k]) => !known.has(norm(k))));
+  const valor_consorcio = txt("valor_consorcio");
+  const criado_em = parseData(pick("criado_em"));
+  const vendedor = txt("vendedor");
 
   // status NÃO entra aqui: lead novo cai em "lead", lead existente mantém a etapa do kanban.
-  return {
+  // (o lead_status do Facebook fica guardado em dados_extras)
+  const lead = {
     external_key,
     nome,
-    telefone: telefone || null,
-    email: email || null,
-    cidade: pick(row, "cidade") ?? null,
-    interesse: pick(row, "interesse") ?? null,
-    valor_pretendido: parseValor(pick(row, "valor_pretendido")),
-    observacoes: pick(row, "observacoes") ?? null,
+    telefone,
+    email,
+    cidade: txt("cidade"),
+    renda: txt("renda"),
+    valor_consorcio,
+    valor_pretendido: parseValor(valor_consorcio),
+    conhece_consorcio: txt("conhece_consorcio"),
+    plataforma: txt("plataforma")?.toLowerCase() ?? null,
+    campanha: txt("campanha"),
+    conjunto: txt("conjunto"),
+    anuncio: txt("anuncio"),
+    formulario: txt("formulario"),
+    interesse: txt("interesse"),
+    observacoes: txt("observacoes"),
     origem,
-    dados_extras,
+    // sem created_time a coluna fica de fora e o banco usa a data de entrada
+    ...(criado_em ? { criado_em } : {}),
+    dados_extras: Object.fromEntries(Object.entries(row).filter(([k]) => !usados.has(k))),
   };
+  return { lead, vendedor };
 }
 
 // Distribuição dos leads sem dono (leads que já têm vendedor nunca mudam de dono):
@@ -92,7 +177,7 @@ async function rodarRoleta(leadIds: string[]) {
 export async function upsertLeads(rows: Row[], origem: string, distribuicao?: Distribuicao) {
   const supa = db();
   const { data: vendedores } = await supa.from("vendedores").select("id, nome, email");
-  const acharVendedor = (v?: string) => {
+  const acharVendedor = (v: string | null) => {
     if (!v) return undefined;
     const n = norm(v);
     return vendedores?.find((x) => norm(x.nome) === n || (x.email && norm(x.email) === n))?.id;
@@ -100,31 +185,36 @@ export async function upsertLeads(rows: Row[], origem: string, distribuicao?: Di
 
   const leads = rows
     .map((r) => {
-      const l = toLead(r, origem);
-      if (!l) return null;
-      const vendedor_id = acharVendedor(pick(r, "vendedor"));
-      return vendedor_id ? { ...l, vendedor_id } : l;
+      const linha = lerLinha(r, origem);
+      if (!linha) return null;
+      const vendedor_id = acharVendedor(linha.vendedor);
+      return vendedor_id ? { ...linha.lead, vendedor_id } : linha.lead;
     })
     .filter((l): l is NonNullable<typeof l> => !!l);
   // dedup dentro do próprio lote (última linha vence)
   const unique = [...new Map(leads.map((l) => [l.external_key, l])).values()];
   if (!unique.length) return { recebidos: rows.length, gravados: 0, ignorados: rows.length };
 
-  // Upsert em lotes com as mesmas colunas: quem não traz vendedor não apaga o vendedor atual.
-  const comVendedor = unique.filter((l) => "vendedor_id" in l);
-  const semVendedor = unique.filter((l) => !("vendedor_id" in l));
-  for (const lote of [comVendedor, semVendedor]) {
-    if (!lote.length) continue;
+  // Upsert em lotes com as mesmas colunas: coluna ausente não apaga o que já está no banco
+  // (planilha sem "vendedor" não tira o dono do lead; sem created_time mantém a data que já existe).
+  const lotes = new Map<string, typeof unique>();
+  for (const l of unique) {
+    const chave = Object.keys(l).sort().join(",");
+    lotes.set(chave, [...(lotes.get(chave) ?? []), l]);
+  }
+  for (const lote of lotes.values()) {
     const { error } = await supa.from("leads").upsert(lote, { onConflict: "external_key" });
     if (error) throw new Error(error.message);
   }
+
+  const semVendedor = unique.filter((l) => !("vendedor_id" in l));
   if (distribuicao && semVendedor.length) {
     // só os que continuam sem dono depois do upsert (novos ou nunca atribuídos)
     const orfaos: string[] = [];
     for (let i = 0; i < semVendedor.length; i += 200) {
       const { data } = await supa.from("leads").select("id")
         .in("external_key", semVendedor.slice(i, i + 200).map((l) => l.external_key)).is("vendedor_id", null)
-        .order("created_at");
+        .order("criado_em");
       orfaos.push(...(data ?? []).map((d) => d.id));
     }
     if (distribuicao === "roleta") await rodarRoleta(orfaos);

@@ -115,7 +115,9 @@ export default function Planilhas() {
           <button className="btn">Cadastrar</button>
         </form>
         <p style={{ fontSize: 12, color: "#666" }}>
-          Colunas reconhecidas: nome, telefone/celular/whatsapp, email, cidade, interesse, valor, observacoes, id e <b>vendedor</b> (nome ou e-mail do vendedor).
+          Padrão do formulário de leads do Facebook/Instagram reconhecido automaticamente: id, created_time, campaign_name, adset_name, ad_name,
+          form_name, platform, você_sabe_como_funciona_o_consórcio?, <b>qual_sua_renda_mensal?</b> ou <b>valor_do_consorcio</b>, nome_completo, telefone e cidade.
+          Também aceita email, observacoes e <b>vendedor</b> (nome ou e-mail do vendedor). As demais colunas ficam guardadas no lead.
           Leads sem a coluna vendedor seguem a distribuição escolhida (roleta, vendedor fixo ou manual); lead que já tem dono nunca muda sozinho. Antes de cadastrar, no Google Sheets clique em <b>Compartilhar → Acesso geral → Qualquer pessoa com o link → Leitor</b>.
           Se a planilha tiver várias abas, abra a aba certa antes de copiar o link. Todas as planilhas ativas sincronizam sozinhas a cada 1 minuto.
         </p>

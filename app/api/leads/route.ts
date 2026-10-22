@@ -18,7 +18,7 @@ export async function GET(req: Request) {
     STATUSES.map(async (s) => {
       const limite = Math.min(Math.max(Number(params.get(s.id)) || 50, 1), 1000);
       const query = supa.from("leads").select("*, vendedores(nome, foto_url)", { count: "exact" })
-        .eq("status", s.id).order("created_at", { ascending: false }).limit(limite);
+        .eq("status", s.id).order("criado_em", { ascending: false }).limit(limite);
       if (p.papel !== "admin") query.eq("vendedor_id", p.id);
       if (q) query.or(`nome.ilike.*${q}*,telefone.ilike.*${q.replace(/\D/g, "") || q}*,cidade.ilike.*${q}*,email.ilike.*${q}*`);
       const { data, count, error } = await query;

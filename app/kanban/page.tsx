@@ -6,18 +6,22 @@ import Avatar from "../Avatar";
 type Lead = {
   id: string; nome: string; telefone: string | null; email: string | null; cidade: string | null;
   interesse: string | null; valor_pretendido: number | null; status: LeadStatus; observacoes: string | null;
-  created_at: string; updated_at: string; vendedor_id: string | null; vendedores: { nome: string; foto_url: string | null } | null;
+  renda: string | null; valor_consorcio: string | null; conhece_consorcio: string | null;
+  plataforma: string | null; campanha: string | null; conjunto: string | null; anuncio: string | null; formulario: string | null;
+  criado_em: string | null; created_at: string; updated_at: string;
+  vendedor_id: string | null; vendedores: { nome: string; foto_url: string | null } | null;
   dados_extras: Record<string, unknown> | null;
 };
 type Vendedor = { id: string; nome: string };
 
 const ATUALIZA_MS = 10000;
 const POR_PAGINA = 50;
+const PLATAFORMA: Record<string, string> = { ig: "Instagram", fb: "Facebook", msg: "Messenger", an: "Audience Network", wa: "WhatsApp" };
 
 const norm = (s: string) =>
-  s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[_\-\s?]+/g, " ").trim();
+  s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
-// Busca nas colunas extras da planilha pela parte do nome (ex: "renda" acha "renda_mensal").
+// Leads antigos (antes da próxima sincronização) ainda têm estes dados só nas colunas extras da planilha.
 function extra(l: Lead, palavras: string[]) {
   for (const [k, v] of Object.entries(l.dados_extras ?? {})) {
     if (palavras.some((p) => norm(k).includes(p)) && v !== null && String(v).trim() !== "") return String(v).trim();
@@ -25,12 +29,15 @@ function extra(l: Lead, palavras: string[]) {
   return null;
 }
 
-const renda = (l: Lead) => extra(l, ["renda", "salario"]);
-const conhece = (l: Lead) => extra(l, ["conhece"]);
+const renda = (l: Lead) => l.renda ?? extra(l, ["renda", "salario"]);
+const conhece = (l: Lead) => l.conhece_consorcio ?? extra(l, ["conhece", "sabe como funciona"]);
+const valorConsorcio = (l: Lead) => (l.valor_pretendido ? brl(Number(l.valor_pretendido)) : l.valor_consorcio);
+const plataforma = (l: Lead) => (l.plataforma ? PLATAFORMA[l.plataforma] ?? l.plataforma : null);
+const simNao = (v: unknown) => (String(v).toLowerCase() === "true" ? "sim" : String(v).toLowerCase() === "false" ? "não" : null);
 
-// Data de entrada do lead: "created_time" do Facebook, senão a data em que entrou no sistema.
+// Quando o lead foi criado de verdade (created_time da planilha); sem isso, quando entrou no sistema.
 function criadoEm(l: Lead) {
-  const d = new Date(extra(l, ["created time", "data de criacao"]) ?? l.created_at);
+  const d = new Date(l.criado_em ?? extra(l, ["created time"]) ?? l.created_at);
   return isNaN(d.getTime()) ? new Date(l.created_at) : d;
 }
 
@@ -148,7 +155,9 @@ export default function Kanban() {
             >
               <h3>{s.label} <span>{total}</span></h3>
               {items.map((l) => {
-                const valor = l.valor_pretendido ? brl(Number(l.valor_pretendido)) : renda(l);
+                const valor = valorConsorcio(l);
+                const rendaLead = valor ? null : renda(l);
+                const origem = plataforma(l);
                 const wa = whatsapp(l.telefone);
                 return (
                   <div
@@ -164,9 +173,10 @@ export default function Kanban() {
                       {novos.has(l.id) && <span className="badge-novo">novo</span>}
                     </div>
                     {valor && <div className="lead-valor">{valor}</div>}
+                    {rendaLead && <div className="lead-valor"><span className="lead-rotulo">Renda</span> {rendaLead}</div>}
                     {l.cidade && <small>📍 {l.cidade}</small>}
                     <div className="lead-rodape">
-                      <small>{fmtData(criadoEm(l))}</small>
+                      <small>{fmtData(criadoEm(l))}{origem ? ` · ${origem}` : ""}</small>
                       <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         {wa && <a href={wa} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title="WhatsApp" className="ico-wa">💬</a>}
                         {l.vendedores
@@ -208,8 +218,12 @@ function Detalhe({ lead, admin, vendedores, onClose, onStatus, onVendedor }: {
   onClose: () => void; onStatus: (s: LeadStatus) => void; onVendedor: (id: string) => void;
 }) {
   const wa = whatsapp(lead.telefone);
-  const usados = ["renda", "salario", "conhece", "created time", "data de criacao"];
+  // o que já aparece nas seções acima não se repete em "outros dados"
+  const usados = ["renda", "salario", "conhece", "sabe como funciona", "created time", "valor do consorcio",
+    "platform", "campaign name", "adset name", "ad name", "form name", "is organic"];
   const outros = Object.entries(lead.dados_extras ?? {}).filter(([k, v]) => v !== null && String(v) !== "" && !usados.some((u) => norm(k).includes(u)));
+  const organico = simNao(lead.dados_extras?.is_organic);
+  const temOrigem = lead.plataforma || lead.campanha || lead.conjunto || lead.anuncio || lead.formulario;
 
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -232,8 +246,8 @@ function Detalhe({ lead, admin, vendedores, onClose, onStatus, onVendedor }: {
         {wa && <a className="btn btn-wa" href={wa} target="_blank" rel="noreferrer">💬 Chamar no WhatsApp</a>}
 
         <section>
-          {linha("Valor do consórcio", lead.valor_pretendido ? brl(Number(lead.valor_pretendido)) : null)}
-          {linha("Renda / salário", renda(lead))}
+          {linha("Valor do consórcio", valorConsorcio(lead))}
+          {linha("Renda mensal", renda(lead))}
           {linha("Cidade", lead.cidade)}
           {linha("Conhece consórcio", conhece(lead))}
           {linha("Criado em", fmtData(criadoEm(lead), true) + " (Brasília)")}
@@ -242,6 +256,17 @@ function Detalhe({ lead, admin, vendedores, onClose, onStatus, onVendedor }: {
           {lead.interesse && linha("Interesse", lead.interesse)}
           {lead.observacoes && linha("Observações", lead.observacoes)}
         </section>
+
+        {temOrigem && (
+          <section>
+            <div className="det-label" style={{ marginBottom: 4 }}>Origem do lead</div>
+            {linha("Plataforma", [plataforma(lead), organico === "sim" ? "orgânico" : organico === "não" ? "anúncio pago" : null].filter(Boolean).join(" · "))}
+            {lead.campanha && linha("Campanha", lead.campanha)}
+            {lead.conjunto && linha("Conjunto", lead.conjunto)}
+            {lead.anuncio && linha("Anúncio", lead.anuncio)}
+            {lead.formulario && linha("Formulário", lead.formulario)}
+          </section>
+        )}
 
         <section style={{ display: "grid", gap: 8 }}>
           <label className="det-label">Etapa</label>

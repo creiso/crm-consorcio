@@ -135,6 +135,7 @@ span.tag { cursor: default; }
 .lead.novo { border-left-color: #1fa34a; background: #f2fbf4; }
 .lead-top { display: flex; justify-content: space-between; gap: 6px; align-items: start; }
 .lead-valor { color: #333; margin: 4px 0 2px; font-weight: 500; }
+.lead-rotulo { color: var(--muted); font-weight: 400; }
 .lead-rodape { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
 .badge-novo { background: #1fa34a; color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 10px; }
 .avatar { width: 24px; height: 24px; border-radius: 50%; background: #334155; color: #fff; font-size: 10px; font-weight: 600;
