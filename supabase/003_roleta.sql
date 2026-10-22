@@ -6,3 +6,6 @@ alter table vendedores add column if not exists ultimo_lead_em timestamptz;  -- 
 
 -- Cada planilha escolhe: roleta, vendedor fixo (vendedor_padrao_id) ou manual (nenhum dos dois)
 alter table planilhas add column if not exists roleta boolean not null default false;
+
+-- Faz a API do Supabase enxergar as colunas novas na hora
+notify pgrst, 'reload schema';
