@@ -1,11 +1,13 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type Dia = { dia: number; rotulo: string; total: number; qtd: number };
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const compacto = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", notation: "compact", maximumFractionDigits: 1 }).format(v);
+// eixo sem "R$" (a unidade está no título) para sobrar espaço às colunas no celular
+const eixo = (v: number) => new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 1 }).format(v);
 
 // Topo do eixo em número "redondo" (passos de 1, 2, 2,5 ou 5 × 10^n), com no máximo 4 faixas.
 function escala(max: number) {
@@ -20,6 +22,16 @@ function escala(max: number) {
 // Colunas de volume vendido por dia do mês: uma série, uma cor; o dia de maior volume ganha rótulo.
 export default function VendasPorDia({ dias, hoje }: { dias: Dia[]; hoje: number | null }) {
   const [foco, setFoco] = useState<number | null>(null);
+  const ref = useRef<HTMLElement>(null);
+
+  // no celular a dica abre com um toque e fecha ao tocar fora do gráfico
+  useEffect(() => {
+    if (foco === null) return;
+    const fora = (e: PointerEvent) => { if (!ref.current?.contains(e.target as Node)) setFoco(null); };
+    document.addEventListener("pointerdown", fora);
+    return () => document.removeEventListener("pointerdown", fora);
+  }, [foco]);
+
   const max = Math.max(0, ...dias.map((d) => d.total));
   const ticks = escala(max);
   const topo = ticks[ticks.length - 1];
@@ -30,11 +42,11 @@ export default function VendasPorDia({ dias, hoje }: { dias: Dia[]; hoje: number
   if (max === 0) return <div className="vazio">Nenhuma venda registrada neste mês ainda.</div>;
 
   return (
-    <figure className="viz">
+    <figure className="viz" ref={ref}>
       <div className="viz-plot">
         {ticks.map((t) => (
           <div key={t} className={`viz-grid ${t === 0 ? "base" : ""}`} style={{ bottom: `${(t / topo) * 100}%` }}>
-            <span>{t === 0 ? "0" : compacto(t)}</span>
+            <span>{t === 0 ? "0" : eixo(t)}</span>
           </div>
         ))}
         <div className="viz-cols" onMouseLeave={() => setFoco(null)}>
@@ -45,6 +57,7 @@ export default function VendasPorDia({ dias, hoje }: { dias: Dia[]; hoje: number
               className={`viz-col ${foco === i ? "ativo" : ""} ${d.dia === hoje ? "hoje" : ""}`}
               aria-label={`${d.rotulo}: ${brl(d.total)}, ${d.qtd} ${d.qtd === 1 ? "cota" : "cotas"}`}
               onMouseEnter={() => setFoco(i)}
+              onClick={() => setFoco(i)}
               onFocus={() => setFoco(i)}
               onBlur={() => setFoco(null)}
             >

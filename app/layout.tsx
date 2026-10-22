@@ -16,13 +16,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {perfil && (
           <nav className="nav">
             <span className="marca">CRM Consórcio</span>
-            {perfil.papel === "admin" && <Link href="/">Dashboard</Link>}
-            <Link href="/kanban">Kanban</Link>
-            {perfil.papel === "admin" && <Link href="/placar">Placar</Link>}
-            {perfil.papel === "admin" && <Link href="/importar">Planilhas</Link>}
-            {perfil.papel === "admin" && <Link href="/usuarios">Usuários</Link>}
+            <div className="nav-links">
+              {perfil.papel === "admin" && <Link href="/">Dashboard</Link>}
+              <Link href="/kanban">Kanban</Link>
+              {perfil.papel === "admin" && <Link href="/placar">Placar</Link>}
+              {perfil.papel === "admin" && <Link href="/importar">Planilhas</Link>}
+              {perfil.papel === "admin" && <Link href="/usuarios">Usuários</Link>}
+            </div>
             <Link href="/perfil" className="eu" title="Meu perfil">
-              <span style={{ textAlign: "right" }}>
+              <span className="eu-nome">
                 {perfil.nome}
                 <small>{perfil.papel === "admin" ? "Administrador" : "Vendedor"}</small>
               </span>

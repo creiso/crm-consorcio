@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { brl } from "@/lib/supabase";
-import { nomeMes, TZ, type LinhaRanking, type VendaPainel } from "@/lib/painel";
+import { nomeMes, brlCompacto, TZ, type LinhaRanking, type VendaPainel } from "@/lib/painel";
 import PagamentoTag from "./PagamentoTag";
 import Avatar from "./Avatar";
 import VendasPorDia, { type Dia } from "./VendasPorDia";
@@ -21,6 +21,11 @@ const MEDALHA = ["🥇", "🥈", "🥉"];
 const pct = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 const cotasTxt = (n: number) => `${n} ${n === 1 ? "cota" : "cotas"}`;
 
+// Valor completo no computador; compacto (R$ 450 mil) no celular, onde o card é estreito.
+const Dinheiro = ({ v }: { v: number }) => (
+  <span title={brl(v)}><span className="v-longo">{brl(v)}</span><span className="v-curto">{brlCompacto(v)}</span></span>
+);
+
 // Variação contra o mês anterior: seta + texto, nunca só cor.
 function Delta({ atual, anterior, mesAnt, pontos }: { atual: number; anterior: number; mesAnt: string; pontos?: boolean }) {
   const vs = <em>vs {nomeMes(mesAnt, true).toLowerCase()}</em>;
@@ -29,7 +34,7 @@ function Delta({ atual, anterior, mesAnt, pontos }: { atual: number; anterior: n
     if (Math.abs(d) < 0.05) return <span className="delta neutro">= igual {vs}</span>;
     return <span className={`delta ${d > 0 ? "bom" : "ruim"}`}>{d > 0 ? "▲" : "▼"} {pct(Math.abs(d))} p.p. {vs}</span>;
   }
-  if (!anterior) return <span className="delta neutro">{atual > 0 ? "sem base no mês anterior" : "—"}</span>;
+  if (!anterior) return <span className="delta neutro">{atual > 0 ? `sem dados de ${nomeMes(mesAnt, true).toLowerCase()}` : "—"}</span>;
   const p = ((atual - anterior) / anterior) * 100;
   if (Math.abs(p) < 0.05) return <span className="delta neutro">= igual {vs}</span>;
   return <span className={`delta ${p > 0 ? "bom" : "ruim"}`}>{p > 0 ? "▲" : "▼"} {pct(Math.abs(p))}% {vs}</span>;
@@ -51,7 +56,7 @@ export default function DashboardView(d: DashProps) {
           <input type="month" name="mes" defaultValue={d.mes} aria-label="Mês" />
           <button className="btn secondary">Filtrar</button>
           {!d.ehMesAtual && <Link className="btn secondary" href="/">Mês atual</Link>}
-          <Link className="btn" href="/placar">📺 Abrir placar</Link>
+          <Link className="btn" href="/placar" aria-label="Abrir placar">📺<span className="so-desk">Abrir placar</span></Link>
         </form>
       </div>
 
@@ -67,7 +72,7 @@ export default function DashboardView(d: DashProps) {
         <div className="tiles span2">
           <div className="card tile">
             <span className="rotulo">Pagamento concluído</span>
-            <div className="valor">{brl(d.concluido)}</div>
+            <div className="valor"><Dinheiro v={d.concluido} /></div>
             <Delta atual={d.concluido} anterior={d.concluidoAnt} mesAnt={d.mesAnt} />
           </div>
           <div className="card tile">
@@ -77,7 +82,7 @@ export default function DashboardView(d: DashProps) {
           </div>
           <div className="card tile">
             <span className="rotulo">Ticket médio</span>
-            <div className="valor">{brl(d.ticket)}</div>
+            <div className="valor"><Dinheiro v={d.ticket} /></div>
             <Delta atual={d.ticket} anterior={d.ticketAnt} mesAnt={d.mesAnt} />
           </div>
           <div className="card tile">
@@ -91,7 +96,7 @@ export default function DashboardView(d: DashProps) {
       <div className="dash-grid">
         <div className="card span2">
           <div className="card-tit">
-            <h3>Volume vendido por dia</h3>
+            <h3>Volume vendido por dia (R$)</h3>
             <span>{cotasTxt(d.cotas)} · {brl(d.volume)}</span>
           </div>
           <VendasPorDia dias={d.dias} hoje={d.hoje} />

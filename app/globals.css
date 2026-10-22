@@ -16,7 +16,9 @@ a { color: var(--brand); }
 .nav .marca { font-weight: 700; margin-right: 16px; letter-spacing: -0.02em; }
 .nav a { color: var(--muted); text-decoration: none; padding: 7px 12px; border-radius: 8px; font-weight: 500; transition: background .15s, color .15s; }
 .nav a:hover { color: var(--text); background: #f1f3f6; }
+.nav-links { display: flex; gap: 4px; }
 .nav .eu { margin-left: auto; display: flex; align-items: center; gap: 10px; color: var(--text); padding: 4px 8px; }
+.nav .eu-nome { text-align: right; }
 .nav .eu small { color: var(--muted); display: block; font-size: 11px; }
 
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
@@ -67,7 +69,7 @@ table th { font-size: 12px; color: var(--muted); font-weight: 500; padding: 6px;
 
 /* gráfico de colunas: uma série (azul validado), grade em hairline, dica no hover/foco */
 .viz { margin: 0; }
-.viz-plot { position: relative; height: 220px; margin: 48px 0 0 64px; }
+.viz-plot { position: relative; height: 220px; margin: 48px 0 0 52px; }
 .viz-grid { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid #eef0f3; }
 .viz-grid.base { border-top-color: #c3c2b7; }
 .viz-grid span { position: absolute; right: calc(100% + 8px); top: -8px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -83,7 +85,7 @@ table th { font-size: 12px; color: var(--muted); font-weight: 500; padding: 6px;
   font-size: 12px; pointer-events: none; white-space: nowrap; box-shadow: 0 6px 20px rgba(15, 23, 42, .2); display: grid; gap: 2px; z-index: 2; }
 .viz-tip strong { font-size: 13px; }
 .viz-tip span { color: #cbd5e1; }
-.viz-x { display: flex; gap: 2px; margin: 6px 0 0 64px; }
+.viz-x { display: flex; gap: 2px; margin: 6px 0 0 52px; }
 .viz-x span { flex: 1; text-align: center; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .viz-tabela summary { cursor: pointer; font-size: 12px; color: var(--muted); margin-top: 14px; }
 .viz-tabela table { width: 100%; font-size: 13px; border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; }
@@ -159,3 +161,43 @@ span.tag { cursor: default; }
 
 .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: grid; place-items: center; }
 .modal { background: #fff; border-radius: 10px; padding: 20px; width: 380px; display: grid; gap: 10px; }
+
+/* ---------- Dashboard no celular ---------- */
+.v-curto, .tag .curto { display: none; }
+@media (max-width: 640px) {
+  /* menu em duas linhas: marca + foto + Sair em cima, links com rolagem lateral embaixo */
+  .nav { position: static; flex-wrap: wrap; padding: 8px 12px 0; row-gap: 4px; }
+  .nav .marca { margin-right: 0; }
+  .nav .eu { padding: 2px 4px; }
+  .nav .eu-nome { display: none; }
+  .nav .btn { padding: 7px 12px; }
+  .nav-links { order: 3; width: calc(100% + 24px); margin: 0 -12px; padding: 0 8px 6px; overflow-x: auto; scrollbar-width: none; }
+  .nav-links::-webkit-scrollbar { display: none; }
+  .nav-links a { flex-shrink: 0; }
+  main { padding: 16px 12px; }
+  .dash-topo { margin-bottom: 14px; }
+  .dash-topo h1 { font-size: 22px; }
+  .filtros { width: 100%; flex-wrap: nowrap; }
+  .filtros input[type="month"] { flex: 1; min-width: 0; width: auto; }
+  .filtros .btn { padding: 9px 12px; flex-shrink: 0; }
+  .so-desk { display: none; }
+  .dash-grid, .tiles { gap: 12px; }
+  .dash-grid { margin-bottom: 12px; }
+  .dash-grid .card { padding: 14px; }
+  .hero .valor { font-size: clamp(26px, 8.5vw, 34px); }
+  .tile .valor { font-size: 22px; }
+  .v-longo { display: none; }
+  .v-curto { display: inline; }
+  .card-tit { flex-wrap: wrap; row-gap: 2px; margin-bottom: 10px; }
+  .viz-plot { height: 180px; margin: 44px 0 0 38px; }
+  .viz-x { margin-left: 38px; }
+  .viz-cols, .viz-x { gap: 1px; }
+  .rank-linha { grid-template-columns: 22px 36px minmax(0, 1fr) auto; gap: 8px; }
+  .rank-valor { font-size: 13px; }
+  .etapa-linha { grid-template-columns: 100px minmax(0, 1fr) 64px; gap: 8px; }
+  .vendas-lista { max-height: none; overflow: visible; margin-right: 0; padding-right: 0; }
+  .sale { grid-template-columns: 38px minmax(0, 1fr); row-gap: 8px; }
+  .sale .dir { grid-column: 2; display: flex; justify-content: space-between; align-items: center; }
+  .tag .longo { display: none; }
+  .tag .curto { display: inline; }
+}
