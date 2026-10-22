@@ -11,6 +11,7 @@ type Lead = {
 type Vendedor = { id: string; nome: string };
 
 const ATUALIZA_MS = 10000;
+const POR_PAGINA = 50;
 
 const norm = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[_\-\s?]+/g, " ").trim();
@@ -55,25 +56,34 @@ export default function Kanban() {
   const [busca, setBusca] = useState("");
   const [admin, setAdmin] = useState(false);
   const [novos, setNovos] = useState<Set<string>>(new Set());
-  const vistos = useRef<Set<string> | null>(null);
+  const [totais, setTotais] = useState<Record<string, number>>({});
+  const [carregando, setCarregando] = useState<string | null>(null);
+  const limitesRef = useRef<Record<string, number>>({}); // quantos leads cada coluna mostra
+  const buscaRef = useRef("");
+  const maisRecente = useRef<string | null>(null);
   const arrastando = useRef(false);
 
   const load = useCallback(async () => {
     if (arrastando.current) return; // não mexe no quadro no meio de um arraste
-    const r = await fetch("/api/leads", { cache: "no-store" }).then((x) => x.json()).catch(() => null);
-    if (!r?.leads) return;
+    const params = new URLSearchParams();
+    STATUSES.forEach((s) => params.set(s.id, String(limitesRef.current[s.id] ?? POR_PAGINA)));
+    if (buscaRef.current) params.set("q", buscaRef.current);
+    const r = await fetch(`/api/leads?${params}`, { cache: "no-store" }).then((x) => x.json()).catch(() => null);
+    if (!r?.leads || arrastando.current) return;
     const lista: Lead[] = r.leads;
 
-    // destaca leads que chegaram depois da primeira carga
-    if (vistos.current) {
-      const chegaram = lista.filter((l) => !vistos.current!.has(l.id)).map((l) => l.id);
+    // destaca só leads criados depois do mais recente já visto (não os que vieram pelo "carregar mais")
+    const topo = lista.reduce<string | null>((m, l) => (!m || l.created_at > m ? l.created_at : m), null);
+    if (maisRecente.current && !buscaRef.current) {
+      const chegaram = lista.filter((l) => l.created_at > maisRecente.current!).map((l) => l.id);
       if (chegaram.length) {
         setNovos((s) => new Set([...s, ...chegaram]));
         setTimeout(() => setNovos((s) => { const n = new Set(s); chegaram.forEach((id) => n.delete(id)); return n; }), 15000);
       }
     }
-    vistos.current = new Set(lista.map((l) => l.id));
+    if (topo && (!maisRecente.current || topo > maisRecente.current)) maisRecente.current = topo;
     setLeads(lista);
+    setTotais(r.totais ?? {});
     setVendedores(r.vendedores ?? []);
     setAdmin(r.perfil?.papel === "admin");
   }, []);
@@ -88,6 +98,20 @@ export default function Kanban() {
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", voltar); window.removeEventListener("focus", voltar); };
   }, [load]);
 
+  // busca no servidor, esperando a pessoa parar de digitar
+  useEffect(() => {
+    const t = setTimeout(() => { buscaRef.current = busca.trim(); load(); }, 350);
+    return () => clearTimeout(t);
+  }, [busca, load]);
+
+  async function carregarMais(status: string) {
+    setCarregando(status);
+    const novo = { ...limitesRef.current, [status]: (limitesRef.current[status] ?? POR_PAGINA) + POR_PAGINA };
+    limitesRef.current = novo;
+    await load();
+    setCarregando(null);
+  }
+
   async function patch(id: string, body: Record<string, unknown>) {
     setLeads((ls) => ls.map((l) => (l.id === id ? { ...l, ...body } : l)));
     await fetch("/api/leads", { method: "PATCH", body: JSON.stringify({ id, ...body }) });
@@ -101,8 +125,6 @@ export default function Kanban() {
     patch(id, { status });
   }
 
-  const q = norm(busca);
-  const filtrados = leads.filter((l) => norm(`${l.nome} ${l.telefone ?? ""} ${l.email ?? ""} ${l.cidade ?? ""}`).includes(q));
   const leadAberto = leads.find((l) => l.id === aberto) ?? null;
 
   return (
@@ -114,7 +136,8 @@ export default function Kanban() {
       </div>
       <div className="board">
         {STATUSES.map((s) => {
-          const items = filtrados.filter((l) => l.status === s.id);
+          const items = leads.filter((l) => l.status === s.id);
+          const total = Math.max(totais[s.id] ?? 0, items.length);
           return (
             <div
               key={s.id}
@@ -123,7 +146,7 @@ export default function Kanban() {
               onDragLeave={() => setOver(null)}
               onDrop={(e) => { setOver(null); arrastando.current = false; mover(e.dataTransfer.getData("id"), s.id); }}
             >
-              <h3>{s.label} <span>{items.length}</span></h3>
+              <h3>{s.label} <span>{total}</span></h3>
               {items.map((l) => {
                 const valor = l.valor_pretendido ? brl(Number(l.valor_pretendido)) : renda(l);
                 const wa = whatsapp(l.telefone);
@@ -154,6 +177,11 @@ export default function Kanban() {
                   </div>
                 );
               })}
+              {total > items.length && (
+                <button className="btn secondary mais" disabled={carregando === s.id} onClick={() => carregarMais(s.id)}>
+                  {carregando === s.id ? "Carregando…" : `Carregar mais (${total - items.length} restantes)`}
+                </button>
+              )}
             </div>
           );
         })}
