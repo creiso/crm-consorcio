@@ -16,7 +16,6 @@ export default function Planilhas() {
   const [padraoArquivo, setPadraoArquivo] = useState("roleta");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
-  const [script, setScript] = useState<Planilha | null>(null);
 
   async function load() {
     const [l, p] = await Promise.all([fetch("/api/leads").then((r) => r.json()), fetch("/api/planilhas").then((r) => r.json())]);
@@ -101,7 +100,6 @@ export default function Planilhas() {
                 <td style={{ padding: 6 }}><input type="checkbox" style={{ width: "auto" }} checked={p.ativo} onChange={(e) => alterar(p, { ativo: e.target.checked })} /></td>
                 <td style={{ padding: 6, whiteSpace: "nowrap" }}>
                   <button className="btn" disabled={busy} onClick={() => sync(p)}>Sincronizar</button>{" "}
-                  <button className="btn secondary" onClick={() => setScript(p)}>Tempo real</button>{" "}
                   <button className="btn secondary" onClick={() => remover(p)}>Remover</button>
                 </td>
               </tr>
@@ -112,13 +110,14 @@ export default function Planilhas() {
 
         <form onSubmit={cadastrar} style={{ display: "grid", gridTemplateColumns: "1fr 2fr 1.3fr auto", gap: 8, marginTop: 16 }}>
           <input placeholder="Nome (ex: Leads Facebook)" value={nova.nome} onChange={(e) => setNova({ ...nova, nome: e.target.value })} required />
-          <input placeholder="Link CSV publicado (Arquivo > Compartilhar > Publicar na web > CSV)" value={nova.csv_url} onChange={(e) => setNova({ ...nova, csv_url: e.target.value })} required />
+          <input placeholder="Link da planilha (copie da barra de endereço do navegador)" value={nova.csv_url} onChange={(e) => setNova({ ...nova, csv_url: e.target.value })} required />
           {selVendedor(nova.distribuicao, (v) => setNova({ ...nova, distribuicao: v }))}
           <button className="btn">Cadastrar</button>
         </form>
         <p style={{ fontSize: 12, color: "#666" }}>
           Colunas reconhecidas: nome, telefone/celular/whatsapp, email, cidade, interesse, valor, observacoes, id e <b>vendedor</b> (nome ou e-mail do vendedor).
-          Leads sem a coluna vendedor seguem a distribuição escolhida (roleta, vendedor fixo ou manual); lead que já tem dono nunca muda sozinho. Todas as planilhas ativas também sincronizam automaticamente 1x por dia.
+          Leads sem a coluna vendedor seguem a distribuição escolhida (roleta, vendedor fixo ou manual); lead que já tem dono nunca muda sozinho. Antes de cadastrar, no Google Sheets clique em <b>Compartilhar → Acesso geral → Qualquer pessoa com o link → Leitor</b>.
+          Se a planilha tiver várias abas, abra a aba certa antes de copiar o link. Todas as planilhas ativas sincronizam sozinhas a cada 1 minuto.
         </p>
       </div>
 
@@ -143,57 +142,7 @@ export default function Planilhas() {
           )}
         </div>
       </div>
-
-      {script && <ScriptModal planilha={script} onClose={() => setScript(null)} />}
     </>
   );
 }
 
-// Script do Google Apps Script já preenchido para esta planilha.
-function ScriptModal({ planilha, onClose }: { planilha: Planilha; onClose: () => void }) {
-  const code = `const URL = "${window.location.origin}/api/sheets-sync?planilha=${planilha.id}";
-const SECRET = "COLE_AQUI_O_SYNC_SECRET";
-
-function enviar(rows) {
-  UrlFetchApp.fetch(URL, {
-    method: "post", contentType: "application/json",
-    headers: { "x-sync-secret": SECRET },
-    payload: JSON.stringify({ rows }),
-  });
-}
-
-function toObjects(sheet, from, count) {
-  const head = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  return sheet.getRange(from, 1, count, head.length).getValues()
-    .map(r => Object.fromEntries(head.map((h, i) => [h, r[i]])));
-}
-
-function onEditSync(e) {
-  const r = e.range;
-  if (r.getRow() < 2) return;
-  enviar(toObjects(r.getSheet(), r.getRow(), r.getNumRows()));
-}
-
-function syncTudo() {
-  const s = SpreadsheetApp.getActiveSheet();
-  enviar(toObjects(s, 2, s.getLastRow() - 1));
-}`;
-  return (
-    <div className="modal-bg" onClick={onClose}>
-      <div className="modal" style={{ width: 640 }} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ margin: 0 }}>Tempo real — {planilha.nome}</h3>
-        <ol style={{ fontSize: 13, margin: 0, paddingLeft: 18 }}>
-          <li>Na planilha: Extensões → Apps Script. Apague tudo e cole o código abaixo.</li>
-          <li>Troque COLE_AQUI_O_SYNC_SECRET pelo SYNC_SECRET (está no arquivo .env.local da pasta do projeto).</li>
-          <li>Salve. Rode <b>syncTudo</b> uma vez (▶ Executar) e autorize.</li>
-          <li>Acionadores ⏰ → Adicionar → função <b>onEditSync</b> → Da planilha → Ao editar.</li>
-        </ol>
-        <textarea readOnly value={code} style={{ width: "100%", height: 260, fontFamily: "monospace", fontSize: 11 }} />
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button className="btn secondary" onClick={() => navigator.clipboard.writeText(code)}>Copiar código</button>
-          <button className="btn" onClick={onClose}>Fechar</button>
-        </div>
-      </div>
-    </div>
-  );
-}

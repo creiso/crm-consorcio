@@ -5,5 +5,7 @@ node_modules
 .env.local
 .env*.local
 next-env.d.ts
+# SQL com segredos preenchidos
+*.local.sql
 
 .vercel

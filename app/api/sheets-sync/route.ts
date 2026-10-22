@@ -10,11 +10,22 @@ type Planilha = { id: string; nome: string; csv_url: string; vendedor_padrao_id:
 
 const distribuicao = (p: { roleta: boolean; vendedor_padrao_id: string | null }) => (p.roleta ? "roleta" : p.vendedor_padrao_id);
 
+// Link normal da planilha (…/d/<ID>/edit#gid=<GID>) vira export CSV, que não tem o cache de ~5 min
+// do "Publicar na web". Exige a planilha compartilhada como "qualquer pessoa com o link pode ver".
+function urlCsv(link: string) {
+  const id = link.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]{20,})/)?.[1];
+  if (!id) return link; // link de "Publicar na web" (/d/e/...) é usado como está
+  const gid = link.match(/[#&?]gid=(\d+)/)?.[1] ?? "0";
+  return `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
+}
+
 async function sincronizar(p: Planilha) {
   let resultado: string;
   try {
-    const resp = await fetch(p.csv_url, { cache: "no-store" });
-    if (!resp.ok) throw new Error(`planilha respondeu ${resp.status}`);
+    const resp = await fetch(urlCsv(p.csv_url), { cache: "no-store" });
+    if (!resp.ok) throw new Error(`planilha respondeu ${resp.status} — ela está compartilhada como "qualquer pessoa com o link"?`);
+    if ((resp.headers.get("content-type") ?? "").includes("text/html"))
+      throw new Error('o Google pediu login — compartilhe a planilha como "qualquer pessoa com o link pode ver"');
     const wb = XLSX.read(await resp.text(), { type: "string" });
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]]);
     const r = await upsertLeads(rows, `sheets:${p.id}`, distribuicao(p));

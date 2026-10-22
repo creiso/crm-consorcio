@@ -4,18 +4,21 @@ type Row = Record<string, unknown>;
 
 // Aceita variações comuns de cabeçalho das planilhas.
 const ALIASES: Record<string, string[]> = {
-  id: ["id", "codigo", "código", "lead_id"],
-  nome: ["nome", "name", "cliente", "nome completo"],
-  telefone: ["telefone", "celular", "whatsapp", "phone", "fone"],
-  email: ["email", "e-mail", "mail"],
+  // inclui os nomes de coluna dos formulários de lead do Facebook/Instagram
+  id: ["id", "codigo", "lead id"],
+  nome: ["nome", "name", "cliente", "nome completo", "full name"],
+  telefone: ["telefone", "celular", "whatsapp", "phone", "phone number", "fone"],
+  email: ["email", "e mail", "mail"],
   cidade: ["cidade", "city"],
   interesse: ["interesse", "produto", "tipo"],
-  valor_pretendido: ["valor", "valor pretendido", "credito", "crédito"],
-  observacoes: ["observacoes", "observações", "obs"],
-  vendedor: ["vendedor", "responsavel", "responsável", "consultor"],
+  valor_pretendido: ["valor", "valor pretendido", "credito"],
+  observacoes: ["observacoes", "obs"],
+  vendedor: ["vendedor", "responsavel", "consultor"],
 };
 
-const norm = (s: string) => s.trim().toLowerCase();
+// "Nome_Completo", "nome completo" e "Nome-completo" viram a mesma coisa; acentos são ignorados.
+const norm = (s: string) =>
+  s.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase().replace(/[_\-\s]+/g, " ");
 
 function pick(row: Row, field: string): string | undefined {
   for (const key of Object.keys(row)) {
