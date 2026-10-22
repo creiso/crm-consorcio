@@ -10,9 +10,11 @@ type Lead = {
   plataforma: string | null; campanha: string | null; conjunto: string | null; anuncio: string | null; formulario: string | null;
   criado_em: string | null; created_at: string; updated_at: string;
   vendedor_id: string | null; vendedores: { nome: string; foto_url: string | null } | null;
+  equipe_id: string | null; equipes: { nome: string } | null;
   dados_extras: Record<string, unknown> | null;
 };
-type Vendedor = { id: string; nome: string };
+type Vendedor = { id: string; nome: string; papel?: string; equipe_id?: string | null };
+type Equipe = { id: string; nome: string };
 
 const ATUALIZA_MS = 10000;
 const POR_PAGINA = 50;
@@ -61,12 +63,16 @@ export default function Kanban() {
   const [vendaLead, setVendaLead] = useState<Lead | null>(null);
   const [aberto, setAberto] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
-  const [admin, setAdmin] = useState(false);
+  const [papel, setPapel] = useState<string>("vendedor");
+  const [equipes, setEquipes] = useState<Equipe[]>([]);
+  const [minhaEquipe, setMinhaEquipe] = useState<string | null>(null);
+  const [filtroEquipe, setFiltroEquipe] = useState("");
   const [novos, setNovos] = useState<Set<string>>(new Set());
   const [totais, setTotais] = useState<Record<string, number>>({});
   const [carregando, setCarregando] = useState<string | null>(null);
   const limitesRef = useRef<Record<string, number>>({}); // quantos leads cada coluna mostra
   const buscaRef = useRef("");
+  const equipeRef = useRef("");
   const maisRecente = useRef<string | null>(null);
   const arrastando = useRef(false);
 
@@ -75,6 +81,7 @@ export default function Kanban() {
     const params = new URLSearchParams();
     STATUSES.forEach((s) => params.set(s.id, String(limitesRef.current[s.id] ?? POR_PAGINA)));
     if (buscaRef.current) params.set("q", buscaRef.current);
+    if (equipeRef.current) params.set("equipe", equipeRef.current);
     const r = await fetch(`/api/leads?${params}`, { cache: "no-store" }).then((x) => x.json()).catch(() => null);
     if (!r?.leads || arrastando.current) return;
     const lista: Lead[] = r.leads;
@@ -92,7 +99,9 @@ export default function Kanban() {
     setLeads(lista);
     setTotais(r.totais ?? {});
     setVendedores(r.vendedores ?? []);
-    setAdmin(r.perfil?.papel === "admin");
+    setEquipes(r.equipes ?? []);
+    setPapel(r.perfil?.papel ?? "vendedor");
+    setMinhaEquipe(r.perfil?.equipe_id ?? null);
   }, []);
 
   // Atualiza sozinho a cada 10s enquanto a aba está visível, e na hora ao voltar para a aba.
@@ -132,13 +141,29 @@ export default function Kanban() {
     patch(id, { status });
   }
 
+  function filtrarEquipe(v: string) {
+    setFiltroEquipe(v);
+    equipeRef.current = v;
+    load();
+  }
+
   const leadAberto = leads.find((l) => l.id === aberto) ?? null;
+  const lider = papel === "admin" || papel === "coordenador";
+  const nomeEquipe = (id: string | null | undefined) => equipes.find((e) => e.id === id)?.nome;
 
   return (
     <>
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
         <h1 style={{ margin: 0 }}>Kanban de leads</h1>
+        {papel === "coordenador" && <span className="pill-equipe">{nomeEquipe(minhaEquipe) ?? "sem equipe"}</span>}
         <input placeholder="Buscar nome, telefone, cidade" value={busca} onChange={(e) => setBusca(e.target.value)} style={{ maxWidth: 320 }} />
+        {papel === "admin" && equipes.length > 0 && (
+          <select value={filtroEquipe} onChange={(e) => filtrarEquipe(e.target.value)} style={{ maxWidth: 220 }} aria-label="Filtrar por equipe">
+            <option value="">Todas as equipes</option>
+            {equipes.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
+            <option value="sem">Sem equipe</option>
+          </select>
+        )}
         <span className="ao-vivo"><i /> ao vivo</span>
       </div>
       <div className="board">
@@ -199,7 +224,7 @@ export default function Kanban() {
 
       {leadAberto && (
         <Detalhe
-          lead={leadAberto} admin={admin} vendedores={vendedores}
+          lead={leadAberto} lider={lider} mostrarEquipe={papel === "admin"} vendedores={vendedores} nomeEquipe={nomeEquipe}
           onClose={() => setAberto(null)}
           onStatus={(status) => mover(leadAberto.id, status)}
           onVendedor={(vendedor_id) => patch(leadAberto.id, { vendedor_id: vendedor_id || null })}
@@ -213,8 +238,9 @@ export default function Kanban() {
 }
 
 // Painel lateral com os dados do lead.
-function Detalhe({ lead, admin, vendedores, onClose, onStatus, onVendedor }: {
-  lead: Lead; admin: boolean; vendedores: Vendedor[];
+// Admin e coordenador (líderes) trocam o vendedor; o coordenador só recebe a lista da equipe dele.
+function Detalhe({ lead, lider, mostrarEquipe, vendedores, nomeEquipe, onClose, onStatus, onVendedor }: {
+  lead: Lead; lider: boolean; mostrarEquipe: boolean; vendedores: Vendedor[]; nomeEquipe: (id?: string | null) => string | undefined;
   onClose: () => void; onStatus: (s: LeadStatus) => void; onVendedor: (id: string) => void;
 }) {
   const wa = whatsapp(lead.telefone);
@@ -273,12 +299,20 @@ function Detalhe({ lead, admin, vendedores, onClose, onStatus, onVendedor }: {
           <select value={lead.status} onChange={(e) => onStatus(e.target.value as LeadStatus)}>
             {STATUSES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
+          {mostrarEquipe && <>
+            <label className="det-label">Equipe</label>
+            <b>{lead.equipes?.nome ?? "Sem equipe"}</b>
+          </>}
           <label className="det-label">Vendedor</label>
-          {admin ? (
+          {lider ? (
             <select value={lead.vendedor_id ?? ""} onChange={(e) => onVendedor(e.target.value)}
               style={{ borderColor: lead.vendedor_id ? "#ccc" : "#e3262f" }}>
               <option value="">⚠ Sem vendedor</option>
-              {vendedores.map((v) => <option key={v.id} value={v.id}>{v.nome}</option>)}
+              {vendedores.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.nome}{v.papel === "coordenador" ? " (coord.)" : ""}{mostrarEquipe && nomeEquipe(v.equipe_id) ? ` — ${nomeEquipe(v.equipe_id)}` : ""}
+                </option>
+              ))}
             </select>
           ) : (
             <span style={{ display: "flex", alignItems: "center", gap: 8 }}>

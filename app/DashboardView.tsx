@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { brl } from "@/lib/supabase";
-import { nomeMes, brlCompacto, TZ, type LinhaRanking, type VendaPainel } from "@/lib/painel";
+import { nomeMes, brlCompacto, TZ, type LinhaRanking, type LinhaEquipe, type Equipe, type VendaPainel } from "@/lib/painel";
 import PagamentoTag from "./PagamentoTag";
 import Avatar from "./Avatar";
 import VendasPorDia, { type Dia } from "./VendasPorDia";
+import { siglaEquipe } from "@/lib/sigla";
 
 export type DashProps = {
   mes: string; mesAnt: string; ehMesAtual: boolean;
@@ -12,8 +13,12 @@ export type DashProps = {
   hojeTotal: number; hojeQtd: number;
   dias: Dia[]; hoje: number | null;
   placar: LinhaRanking[];
+  placarEquipes: LinhaEquipe[];
   etapas: { id: string; label: string; qtd: number }[]; leadsMes: number;
   vendas: VendaPainel[];
+  // escopo: equipe filtrada (admin) ou a equipe do coordenador; listaEquipes só vem para quem pode filtrar
+  equipeAtual: Equipe | null;
+  listaEquipes: Equipe[] | null;
 };
 
 const ICONE: Record<string, string> = { imovel: "🏠", automovel: "🚗", servicos: "🛠️" };
@@ -44,19 +49,63 @@ export default function DashboardView(d: DashProps) {
   const lider = d.placar[0]?.total || 1;
   const maxEtapa = Math.max(1, ...d.etapas.map((e) => e.qtd));
   const mesNome = nomeMes(d.mes).split(" de ")[0].toLowerCase(); // "outubro"
+  const liderEquipes = d.placarEquipes[0]?.total || 1;
+  const comEquipes = d.placarEquipes.length > 0;
+  const placarHref = d.equipeAtual && d.listaEquipes ? `/placar?equipe=${d.equipeAtual.id}` : "/placar";
+
+  const cardVendas = (
+    <div className={`card ${comEquipes ? "span3" : "span2"}`}>
+      <div className="card-tit">
+        <h3>Vendas do mês</h3>
+        <span>{d.vendas.length} registradas</span>
+      </div>
+      {d.vendas.length === 0 ? <div className="vazio">Nenhuma venda no período.</div> : (
+        <div className="vendas-lista">
+          {d.vendas.map((v) => (
+            <div key={v.id} className="sale">
+              <div className="ico">{ICONE[v.tipo] ?? "📄"}</div>
+              <div style={{ minWidth: 0 }}>
+                <div className="name">{v.leads?.nome ?? "—"}</div>
+                <div className="meta">
+                  <Avatar nome={v.vendedores?.nome} foto={v.vendedores?.foto_url} tamanho={20} />
+                  <span>{v.vendedores?.nome ?? "—"}</span>
+                  <span>·</span>
+                  {(v.grupo || v.cota) && <span>{v.grupo && `Grupo ${v.grupo}`}{v.cota && ` / Cota ${v.cota}`} ·</span>}
+                  <span>{new Date(v.created_at).toLocaleString("pt-BR", { timeZone: TZ, day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                </div>
+              </div>
+              <div className="dir">
+                <span className="val">{brl(Number(v.valor))}</span>
+                <PagamentoTag id={v.id} value={v.pagamento} editavel={!!d.listaEquipes} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <>
       <div className="dash-topo">
         <div>
           <h1>Dashboard</h1>
-          <p>{nomeMes(d.mes)}{d.ehMesAtual ? " · parcial do mês" : ""}</p>
+          <p>
+            {nomeMes(d.mes)}{d.ehMesAtual ? " · parcial do mês" : ""}
+            {d.equipeAtual && <> · <span className="pill-equipe">{d.equipeAtual.nome}</span></>}
+          </p>
         </div>
         <form className="filtros">
           <input type="month" name="mes" defaultValue={d.mes} aria-label="Mês" />
+          {d.listaEquipes && d.listaEquipes.length > 0 && (
+            <select name="equipe" defaultValue={d.equipeAtual?.id ?? ""} aria-label="Equipe" className="filtro-equipe">
+              <option value="">Todas as equipes</option>
+              {d.listaEquipes.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
+            </select>
+          )}
           <button className="btn secondary">Filtrar</button>
           {!d.ehMesAtual && <Link className="btn secondary" href="/">Mês atual</Link>}
-          <Link className="btn" href="/placar" aria-label="Abrir placar">📺<span className="so-desk">Abrir placar</span></Link>
+          <Link className="btn" href={placarHref} aria-label="Abrir placar">📺<span className="so-desk">Abrir placar</span></Link>
         </form>
       </div>
 
@@ -105,7 +154,7 @@ export default function DashboardView(d: DashProps) {
         <div className="card">
           <div className="card-tit">
             <h3>Ranking de vendedores</h3>
-            <Link href="/placar">Ver placar →</Link>
+            <Link href={placarHref}>Ver placar →</Link>
           </div>
           {d.placar.length === 0 && <div className="vazio">Cadastre vendedores em Usuários.</div>}
           {d.placar.slice(0, 8).map((r, i) => (
@@ -123,7 +172,28 @@ export default function DashboardView(d: DashProps) {
         </div>
       </div>
 
-      <div className="dash-grid">
+      <div className={`dash-grid ${comEquipes ? "dois" : ""}`}>
+        {comEquipes && (
+          <div className="card">
+            <div className="card-tit">
+              <h3>Placar das equipes</h3>
+              <span>volume do mês</span>
+            </div>
+            {d.placarEquipes.map((e, i) => (
+              <div key={e.id} className={`rank-linha ${d.equipeAtual?.id === e.id ? "destaque" : ""}`}
+                title={`${e.nome}: ${brl(e.total)} em ${cotasTxt(e.qtd)}`}>
+                <span className="rank-pos">{e.total > 0 && i < 3 ? MEDALHA[i] : `${i + 1}º`}</span>
+                <span className="equipe-badge">{siglaEquipe(e.nome)}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div className="rank-nome">{e.nome}<small>{cotasTxt(e.qtd)} · {e.membros} {e.membros === 1 ? "vendedor" : "vendedores"}</small></div>
+                  <div className="rank-trilho">{e.total > 0 && <div className="rank-barra" style={{ width: `${(e.total / liderEquipes) * 100}%` }} />}</div>
+                </div>
+                <span className="rank-valor">{brl(e.total)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="card">
           <div className="card-tit">
             <h3>Leads do mês por etapa</h3>
@@ -138,36 +208,10 @@ export default function DashboardView(d: DashProps) {
           ))}
         </div>
 
-        <div className="card span2">
-          <div className="card-tit">
-            <h3>Vendas do mês</h3>
-            <span>{d.vendas.length} registradas</span>
-          </div>
-          {d.vendas.length === 0 ? <div className="vazio">Nenhuma venda no período.</div> : (
-            <div className="vendas-lista">
-              {d.vendas.map((v) => (
-                <div key={v.id} className="sale">
-                  <div className="ico">{ICONE[v.tipo] ?? "📄"}</div>
-                  <div style={{ minWidth: 0 }}>
-                    <div className="name">{v.leads?.nome ?? "—"}</div>
-                    <div className="meta">
-                      <Avatar nome={v.vendedores?.nome} foto={v.vendedores?.foto_url} tamanho={20} />
-                      <span>{v.vendedores?.nome ?? "—"}</span>
-                      <span>·</span>
-                      {(v.grupo || v.cota) && <span>{v.grupo && `Grupo ${v.grupo}`}{v.cota && ` / Cota ${v.cota}`} ·</span>}
-                      <span>{new Date(v.created_at).toLocaleString("pt-BR", { timeZone: TZ, day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
-                    </div>
-                  </div>
-                  <div className="dir">
-                    <span className="val">{brl(Number(v.valor))}</span>
-                    <PagamentoTag id={v.id} value={v.pagamento} editavel />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {!comEquipes && cardVendas}
       </div>
+
+      {comEquipes && <div className="dash-grid">{cardVendas}</div>}
     </>
   );
 }

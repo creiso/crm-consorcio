@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
-import { upsertLeads } from "@/lib/leads";
+import { upsertLeads, type Distribuicao } from "@/lib/leads";
 import { db } from "@/lib/supabase";
 import { perfilApi } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-type Planilha = { id: string; nome: string; csv_url: string; vendedor_padrao_id: string | null; roleta: boolean };
+type Planilha = { id: string; nome: string; csv_url: string; modo: Distribuicao["modo"]; equipes: string[] | null };
 
-const distribuicao = (p: { roleta: boolean; vendedor_padrao_id: string | null }) => (p.roleta ? "roleta" : p.vendedor_padrao_id);
+const distribuicao = (p: { modo: Distribuicao["modo"]; equipes: string[] | null }): Distribuicao =>
+  ({ modo: p.modo, equipes: p.equipes ?? [] });
 
 // Link normal da planilha (…/d/<ID>/edit#gid=<GID>) vira export CSV, que não tem o cache de ~5 min
 // do "Publicar na web". Exige a planilha compartilhada como "qualquer pessoa com o link pode ver".
@@ -41,7 +42,7 @@ async function sincronizar(p: Planilha) {
 // GET ?id=...: botão "Sincronizar agora" do admin.
 export async function GET(req: Request) {
   const id = new URL(req.url).searchParams.get("id");
-  const query = db().from("planilhas").select("id, nome, csv_url, vendedor_padrao_id, roleta").eq("ativo", true);
+  const query = db().from("planilhas").select("id, nome, csv_url, modo, equipes").eq("ativo", true);
 
   if (id) {
     const p = await perfilApi("admin");
@@ -62,7 +63,7 @@ export async function POST(req: Request) {
   if (req.headers.get("x-sync-secret") !== process.env.SYNC_SECRET)
     return NextResponse.json({ error: "não autorizado" }, { status: 401 });
   const planilhaId = new URL(req.url).searchParams.get("planilha");
-  const { data: p } = await db().from("planilhas").select("id, vendedor_padrao_id, roleta").eq("id", planilhaId ?? "").maybeSingle();
+  const { data: p } = await db().from("planilhas").select("id, modo, equipes").eq("id", planilhaId ?? "").maybeSingle();
   if (!p) return NextResponse.json({ error: "planilha não cadastrada" }, { status: 404 });
 
   const { rows } = await req.json();

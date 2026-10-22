@@ -146,15 +146,20 @@ export function lerLinha(row: Row, origem: string) {
   return { lead, vendedor };
 }
 
-// Distribuição dos leads sem dono (leads que já têm vendedor nunca mudam de dono):
-// "roleta" = rodízio entre vendedores ativos na roleta; um id = vendedor fixo; null = admin distribui manualmente.
-export type Distribuicao = "roleta" | string | null | undefined;
+// Distribuição dos leads sem dono (lead que já tem vendedor nunca muda de dono sozinho):
+// equipes = para quais equipes a planilha vai (vazio = todas);
+// "automatica" = roleta entre os vendedores dessas equipes; "manual" = fica sem vendedor para o admin
+// (ou o coordenador, quando a planilha é de uma equipe só) distribuir no kanban.
+export type Distribuicao = { modo: "automatica" | "manual"; equipes: string[] };
 
-async function rodarRoleta(leadIds: string[]) {
+// Coordenador não entra na roleta: só papel "vendedor", ativo e marcado "na roleta".
+async function rodarRoleta(leadIds: string[], equipes: string[]) {
   const supa = db();
-  const { data: fila } = await supa.from("vendedores").select("id")
+  const q = supa.from("vendedores").select("id, equipe_id")
     .eq("papel", "vendedor").eq("ativo", true).eq("na_roleta", true)
     .order("ultimo_lead_em", { ascending: true, nullsFirst: true });
+  if (equipes.length) q.in("equipe_id", equipes);
+  const { data: fila } = await q;
   if (!fila?.length || !leadIds.length) return;
 
   const porVendedor = new Map<string, string[]>();
@@ -168,27 +173,28 @@ async function rodarRoleta(leadIds: string[]) {
     const ids = porVendedor.get(v.id);
     if (!ids) continue;
     for (let j = 0; j < ids.length; j += 200)
-      await supa.from("leads").update({ vendedor_id: v.id }).in("id", ids.slice(j, j + 200)).is("vendedor_id", null);
+      await supa.from("leads").update({ vendedor_id: v.id, equipe_id: v.equipe_id }).in("id", ids.slice(j, j + 200)).is("vendedor_id", null);
     const ultimaPosicao = leadIds.lastIndexOf(ids[ids.length - 1]);
     await supa.from("vendedores").update({ ultimo_lead_em: new Date(base + ultimaPosicao).toISOString() }).eq("id", v.id);
   }
 }
 
-export async function upsertLeads(rows: Row[], origem: string, distribuicao?: Distribuicao) {
+export async function upsertLeads(rows: Row[], origem: string, distribuicao: Distribuicao) {
   const supa = db();
-  const { data: vendedores } = await supa.from("vendedores").select("id, nome, email");
+  const { data: vendedores } = await supa.from("vendedores").select("id, nome, email, equipe_id");
   const acharVendedor = (v: string | null) => {
     if (!v) return undefined;
     const n = norm(v);
-    return vendedores?.find((x) => norm(x.nome) === n || (x.email && norm(x.email) === n))?.id;
+    return vendedores?.find((x) => norm(x.nome) === n || (x.email && norm(x.email) === n));
   };
 
   const leads = rows
     .map((r) => {
       const linha = lerLinha(r, origem);
       if (!linha) return null;
-      const vendedor_id = acharVendedor(linha.vendedor);
-      return vendedor_id ? { ...linha.lead, vendedor_id } : linha.lead;
+      // coluna "vendedor" na planilha: o lead já chega com dono (e com a equipe dele)
+      const v = acharVendedor(linha.vendedor);
+      return v ? { ...linha.lead, vendedor_id: v.id, equipe_id: v.equipe_id } : linha.lead;
     })
     .filter((l): l is NonNullable<typeof l> => !!l);
   // dedup dentro do próprio lote (última linha vence)
@@ -208,7 +214,7 @@ export async function upsertLeads(rows: Row[], origem: string, distribuicao?: Di
   }
 
   const semVendedor = unique.filter((l) => !("vendedor_id" in l));
-  if (distribuicao && semVendedor.length) {
+  if (semVendedor.length) {
     // só os que continuam sem dono depois do upsert (novos ou nunca atribuídos)
     const orfaos: string[] = [];
     for (let i = 0; i < semVendedor.length; i += 200) {
@@ -217,10 +223,12 @@ export async function upsertLeads(rows: Row[], origem: string, distribuicao?: Di
         .order("criado_em");
       orfaos.push(...(data ?? []).map((d) => d.id));
     }
-    if (distribuicao === "roleta") await rodarRoleta(orfaos);
-    else
+    // planilha de uma equipe só: o lead sem dono já fica na equipe (o coordenador enxerga e distribui)
+    const unicaEquipe = distribuicao.equipes.length === 1 ? distribuicao.equipes[0] : null;
+    if (unicaEquipe)
       for (let i = 0; i < orfaos.length; i += 200)
-        await supa.from("leads").update({ vendedor_id: distribuicao }).in("id", orfaos.slice(i, i + 200));
+        await supa.from("leads").update({ equipe_id: unicaEquipe }).in("id", orfaos.slice(i, i + 200)).is("vendedor_id", null);
+    if (distribuicao.modo === "automatica") await rodarRoleta(orfaos, distribuicao.equipes);
   }
   return { recebidos: rows.length, gravados: unique.length, ignorados: rows.length - leads.length };
 }

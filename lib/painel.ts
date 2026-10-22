@@ -33,17 +33,26 @@ export function nomeMes(mes: string, curto = false) {
 
 export type VendaPainel = {
   id: string; valor: number; tipo: string; grupo: string | null; cota: string | null;
-  pagamento: "aguardando" | "concluido" | "cancelado"; created_at: string; vendedor_id: string;
+  pagamento: "aguardando" | "concluido" | "cancelado"; created_at: string; vendedor_id: string; equipe_id: string | null;
   leads: { nome: string } | null; vendedores: { nome: string; foto_url: string | null } | null;
 };
 
-export async function vendasEntre(inicio: Date, fim: Date) {
-  const { data, error } = await db().from("vendas")
-    .select("id, valor, tipo, grupo, cota, pagamento, created_at, vendedor_id, leads(nome), vendedores(nome, foto_url)")
+// equipeId limita às vendas de uma equipe (coordenador, ou admin filtrando)
+export async function vendasEntre(inicio: Date, fim: Date, equipeId?: string | null) {
+  const q = db().from("vendas")
+    .select("id, valor, tipo, grupo, cota, pagamento, created_at, vendedor_id, equipe_id, leads(nome), vendedores(nome, foto_url)")
     .gte("created_at", inicio.toISOString()).lt("created_at", fim.toISOString())
     .order("created_at", { ascending: false });
+  if (equipeId) q.eq("equipe_id", equipeId);
+  const { data, error } = await q;
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as VendaPainel[];
+}
+
+export type Equipe = { id: string; nome: string };
+export async function listarEquipes(): Promise<Equipe[]> {
+  const { data } = await db().from("equipes").select("id, nome").order("nome");
+  return data ?? [];
 }
 
 export const validas = (vendas: VendaPainel[]) => vendas.filter((v) => v.pagamento !== "cancelado");
@@ -52,9 +61,11 @@ export const soma = (vendas: VendaPainel[]) => vendas.reduce((s, v) => s + Numbe
 export type LinhaRanking = { id: string; nome: string; foto_url: string | null; total: number; qtd: number };
 
 // Ranking por volume vendido (canceladas não contam). Vendedores ativos sem venda entram zerados.
-export async function ranking(vendas: VendaPainel[]): Promise<LinhaRanking[]> {
-  const { data: equipe } = await db().from("vendedores")
-    .select("id, nome, foto_url").eq("ativo", true).eq("papel", "vendedor");
+// Com equipeId, só os vendedores daquela equipe.
+export async function ranking(vendas: VendaPainel[], equipeId?: string | null): Promise<LinhaRanking[]> {
+  const q = db().from("vendedores").select("id, nome, foto_url").eq("ativo", true).eq("papel", "vendedor");
+  if (equipeId) q.eq("equipe_id", equipeId);
+  const { data: equipe } = await q;
   const mapa = new Map<string, LinhaRanking>();
   for (const v of equipe ?? []) mapa.set(v.id, { ...v, total: 0, qtd: 0 });
   for (const v of validas(vendas)) {
@@ -63,6 +74,26 @@ export async function ranking(vendas: VendaPainel[]): Promise<LinhaRanking[]> {
     linha.total += Number(v.valor);
     linha.qtd += 1;
     mapa.set(v.vendedor_id, linha);
+  }
+  return [...mapa.values()].sort((a, b) => b.total - a.total || b.qtd - a.qtd || a.nome.localeCompare(b.nome));
+}
+
+export type LinhaEquipe = { id: string; nome: string; total: number; qtd: number; membros: number };
+
+// Placar das equipes: soma das vendas pela equipe gravada na venda. Equipes sem venda entram zeradas.
+export async function rankingEquipes(vendas: VendaPainel[]): Promise<LinhaEquipe[]> {
+  const [equipes, { data: membros }] = await Promise.all([
+    listarEquipes(),
+    db().from("vendedores").select("equipe_id").eq("ativo", true).eq("papel", "vendedor").not("equipe_id", "is", null),
+  ]);
+  const mapa = new Map<string, LinhaEquipe>();
+  for (const e of equipes) mapa.set(e.id, { ...e, total: 0, qtd: 0, membros: 0 });
+  for (const m of membros ?? []) { const e = mapa.get(m.equipe_id); if (e) e.membros += 1; }
+  for (const v of validas(vendas)) {
+    const e = v.equipe_id ? mapa.get(v.equipe_id) : undefined;
+    if (!e) continue;
+    e.total += Number(v.valor);
+    e.qtd += 1;
   }
   return [...mapa.values()].sort((a, b) => b.total - a.total || b.qtd - a.qtd || a.nome.localeCompare(b.nome));
 }

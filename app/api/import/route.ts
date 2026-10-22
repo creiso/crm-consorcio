@@ -6,10 +6,13 @@ import { perfilApi } from "@/lib/auth";
 export async function POST(req: Request) {
   const p = await perfilApi("admin");
   if (p instanceof NextResponse) return p;
-  const { rows, distribuicao } = await req.json();
+  const { rows, modo, equipes } = await req.json();
   if (!Array.isArray(rows)) return NextResponse.json({ error: "rows inválido" }, { status: 400 });
   try {
-    return NextResponse.json(await upsertLeads(rows, "planilha", distribuicao || null));
+    return NextResponse.json(await upsertLeads(rows, "planilha", {
+      modo: modo === "manual" ? "manual" : "automatica",
+      equipes: Array.isArray(equipes) ? equipes : [],
+    }));
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
