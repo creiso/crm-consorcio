@@ -1,5 +1,6 @@
 import { db, brl } from "@/lib/supabase";
 import PagamentoTag from "./PagamentoTag";
+import { exigirPerfil } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -16,15 +17,19 @@ export default async function Dashboard({ searchParams }: { searchParams: { mes?
   const inicio = new Date(`${mes}-01T00:00:00`);
   const fim = new Date(inicio.getFullYear(), inicio.getMonth() + 1, 1);
 
+  const perfil = await exigirPerfil();
+  const admin = perfil.papel === "admin";
+
   const supa = db();
-  const [{ data }, leadsMes] = await Promise.all([
-    supa.from("vendas")
-      .select("*, leads(nome), vendedores(nome)")
-      .gte("created_at", inicio.toISOString()).lt("created_at", fim.toISOString())
-      .order("created_at", { ascending: false }),
-    supa.from("leads").select("id", { count: "exact", head: true })
-      .gte("created_at", inicio.toISOString()).lt("created_at", fim.toISOString()),
-  ]);
+  const vendasQ = supa.from("vendas")
+    .select("*, leads(nome), vendedores(nome)")
+    .gte("created_at", inicio.toISOString()).lt("created_at", fim.toISOString())
+    .order("created_at", { ascending: false });
+  const leadsQ = supa.from("leads").select("id", { count: "exact", head: true })
+    .gte("created_at", inicio.toISOString()).lt("created_at", fim.toISOString());
+  // vendedor só enxerga os próprios números
+  if (!admin) { vendasQ.eq("vendedor_id", perfil.id); leadsQ.eq("vendedor_id", perfil.id); }
+  const [{ data }, leadsMes] = await Promise.all([vendasQ, leadsQ]);
   const vendas = ((data ?? []) as Venda[]).filter((v) => v.pagamento !== "cancelado");
 
   const total = vendas.reduce((s, v) => s + Number(v.valor), 0);
@@ -43,7 +48,7 @@ export default async function Dashboard({ searchParams }: { searchParams: { mes?
   return (
     <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1>Dashboard de vendas</h1>
+        <h1>{admin ? "Dashboard de vendas" : `Olá, ${perfil.nome}`}</h1>
         <form>
           <input type="month" name="mes" defaultValue={mes} style={{ width: 180 }} />{" "}
           <button className="btn secondary">Filtrar</button>
@@ -84,7 +89,7 @@ export default async function Dashboard({ searchParams }: { searchParams: { mes?
                   {new Date(v.created_at).toLocaleDateString("pt-BR")}
                 </div>
                 <div className="val">{brl(Number(v.valor))}</div>
-                <PagamentoTag id={v.id} value={v.pagamento} />
+                <PagamentoTag id={v.id} value={v.pagamento} editavel={admin} />
               </div>
             </div>
           )) : <p style={{ color: "#666" }}>Nenhuma venda no período.</p>}

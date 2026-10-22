@@ -12,6 +12,7 @@ const ALIASES: Record<string, string[]> = {
   interesse: ["interesse", "produto", "tipo"],
   valor_pretendido: ["valor", "valor pretendido", "credito", "crédito"],
   observacoes: ["observacoes", "observações", "obs"],
+  vendedor: ["vendedor", "responsavel", "responsável", "consultor"],
 };
 
 const norm = (s: string) => s.trim().toLowerCase();
@@ -57,13 +58,41 @@ export function toLead(row: Row, origem: string) {
   };
 }
 
-export async function upsertLeads(rows: Row[], origem: string) {
-  const leads = rows.map((r) => toLead(r, origem)).filter((l): l is NonNullable<typeof l> => !!l);
+// vendedorPadraoId: atribuído aos leads NOVOS sem coluna "vendedor" (leads existentes mantêm o dono).
+export async function upsertLeads(rows: Row[], origem: string, vendedorPadraoId?: string | null) {
+  const supa = db();
+  const { data: vendedores } = await supa.from("vendedores").select("id, nome, email");
+  const acharVendedor = (v?: string) => {
+    if (!v) return undefined;
+    const n = norm(v);
+    return vendedores?.find((x) => norm(x.nome) === n || (x.email && norm(x.email) === n))?.id;
+  };
+
+  const leads = rows
+    .map((r) => {
+      const l = toLead(r, origem);
+      if (!l) return null;
+      const vendedor_id = acharVendedor(pick(r, "vendedor"));
+      return vendedor_id ? { ...l, vendedor_id } : l;
+    })
+    .filter((l): l is NonNullable<typeof l> => !!l);
   // dedup dentro do próprio lote (última linha vence)
   const unique = [...new Map(leads.map((l) => [l.external_key, l])).values()];
   if (!unique.length) return { recebidos: rows.length, gravados: 0, ignorados: rows.length };
 
-  const { error } = await db().from("leads").upsert(unique, { onConflict: "external_key" });
-  if (error) throw new Error(error.message);
+  // Upsert em lotes com as mesmas colunas: quem não traz vendedor não apaga o vendedor atual.
+  const comVendedor = unique.filter((l) => "vendedor_id" in l);
+  const semVendedor = unique.filter((l) => !("vendedor_id" in l));
+  for (const lote of [comVendedor, semVendedor]) {
+    if (!lote.length) continue;
+    const { error } = await supa.from("leads").upsert(lote, { onConflict: "external_key" });
+    if (error) throw new Error(error.message);
+  }
+  if (vendedorPadraoId) {
+    for (let i = 0; i < semVendedor.length; i += 200) {
+      await supa.from("leads").update({ vendedor_id: vendedorPadraoId })
+        .in("external_key", semVendedor.slice(i, i + 200).map((l) => l.external_key)).is("vendedor_id", null);
+    }
+  }
   return { recebidos: rows.length, gravados: unique.length, ignorados: rows.length - leads.length };
 }

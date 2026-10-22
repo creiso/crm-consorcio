@@ -7,9 +7,10 @@ type P = keyof typeof LABEL;
 const NEXT: Record<P, P> = { aguardando: "concluido", concluido: "cancelado", cancelado: "aguardando" };
 
 // Clique alterna: aguardando → concluído → cancelado → aguardando
-export default function PagamentoTag({ id, value }: { id: string; value: P }) {
+export default function PagamentoTag({ id, value, editavel }: { id: string; value: P; editavel: boolean }) {
   const [v, setV] = useState<P>(value);
   const router = useRouter();
+  if (!editavel) return <span className={`tag ${v}`}>{LABEL[v]}</span>;
   async function toggle() {
     const novo = NEXT[v];
     setV(novo);

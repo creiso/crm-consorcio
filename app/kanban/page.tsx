@@ -5,7 +5,7 @@ import { STATUSES, LeadStatus, brl } from "@/lib/supabase";
 type Lead = {
   id: string; nome: string; telefone: string | null; email: string | null;
   interesse: string | null; valor_pretendido: number | null; status: LeadStatus;
-  updated_at: string; vendedores: { nome: string } | null;
+  updated_at: string; vendedor_id: string | null; vendedores: { nome: string } | null;
 };
 type Vendedor = { id: string; nome: string };
 
@@ -15,11 +15,18 @@ export default function Kanban() {
   const [over, setOver] = useState<string | null>(null);
   const [vendaLead, setVendaLead] = useState<Lead | null>(null);
   const [busca, setBusca] = useState("");
+  const [admin, setAdmin] = useState(false);
 
   async function load() {
     const r = await (await fetch("/api/leads")).json();
     setLeads(r.leads ?? []);
     setVendedores(r.vendedores ?? []);
+    setAdmin(r.perfil?.papel === "admin");
+  }
+
+  async function atribuir(id: string, vendedor_id: string) {
+    await fetch("/api/leads", { method: "PATCH", body: JSON.stringify({ id, vendedor_id }) });
+    load();
   }
 
   useEffect(() => {
@@ -65,7 +72,13 @@ export default function Kanban() {
                   {l.telefone && <small>{l.telefone}</small>}
                   {l.interesse && <small>{l.interesse}</small>}
                   {l.valor_pretendido && <small>{brl(Number(l.valor_pretendido))}</small>}
-                  {l.vendedores && <small>👤 {l.vendedores.nome}</small>}
+                  {admin ? (
+                    <select value={l.vendedor_id ?? ""} onChange={(e) => atribuir(l.id, e.target.value)}
+                      style={{ marginTop: 6, padding: 4, fontSize: 12, borderColor: l.vendedor_id ? "#ccc" : "#e3262f" }}>
+                      <option value="">⚠ Sem vendedor</option>
+                      {vendedores.map((v) => <option key={v.id} value={v.id}>👤 {v.nome}</option>)}
+                    </select>
+                  ) : l.vendedores && <small>👤 {l.vendedores.nome}</small>}
                 </div>
               ))}
             </div>
@@ -82,7 +95,7 @@ export default function Kanban() {
 function VendaModal({ lead, vendedores, onClose, onSaved }: {
   lead: Lead; vendedores: Vendedor[]; onClose: () => void; onSaved: () => void;
 }) {
-  const [f, setF] = useState({ vendedor_id: "", valor: String(lead.valor_pretendido ?? ""), tipo: "imovel", grupo: "", cota: "" });
+  const [f, setF] = useState({ vendedor_id: lead.vendedor_id ?? (vendedores.length === 1 ? vendedores[0].id : ""), valor: String(lead.valor_pretendido ?? ""), tipo: "imovel", grupo: "", cota: "" });
   const [erro, setErro] = useState("");
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
 
