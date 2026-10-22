@@ -12,7 +12,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {perfil && (
           <nav className="nav">
             <strong>CRM Consórcio</strong>
-            <Link href="/">Dashboard</Link>
+            {perfil.papel === "admin" && <Link href="/">Dashboard</Link>}
             <Link href="/kanban">Kanban</Link>
             {perfil.papel === "admin" && <Link href="/importar">Planilhas</Link>}
             {perfil.papel === "admin" && <Link href="/usuarios">Usuários</Link>}

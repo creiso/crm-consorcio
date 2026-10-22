@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const p = await perfilApi("admin");
   if (p instanceof NextResponse) return p;
-  const { data } = await db().from("vendedores").select("id, nome, email, papel, ativo").order("nome");
+  const { data } = await db().from("vendedores").select("id, nome, email, papel, ativo, na_roleta").order("nome");
   return NextResponse.json(data ?? []);
 }
 
@@ -32,12 +32,15 @@ export async function POST(req: Request) {
   return NextResponse.json({ ok: true });
 }
 
-// Ativar/desativar acesso (não apaga histórico de vendas).
+// Ativar/desativar acesso (não apaga histórico de vendas) e entrar/sair da roleta.
 export async function PATCH(req: Request) {
   const p = await perfilApi("admin");
   if (p instanceof NextResponse) return p;
-  const { id, ativo } = await req.json();
-  if (id === p.id) return NextResponse.json({ error: "Você não pode desativar a si mesmo" }, { status: 400 });
-  await db().from("vendedores").update({ ativo }).eq("id", id);
+  const { id, ativo, na_roleta } = await req.json();
+  if (id === p.id && ativo === false) return NextResponse.json({ error: "Você não pode desativar a si mesmo" }, { status: 400 });
+  const patch: Record<string, boolean> = {};
+  if (typeof ativo === "boolean") patch.ativo = ativo;
+  if (typeof na_roleta === "boolean") patch.na_roleta = na_roleta;
+  await db().from("vendedores").update(patch).eq("id", id);
   return NextResponse.json({ ok: true });
 }

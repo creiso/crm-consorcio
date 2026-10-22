@@ -4,16 +4,16 @@ import * as XLSX from "xlsx";
 
 type Vendedor = { id: string; nome: string };
 type Planilha = {
-  id: string; nome: string; csv_url: string; ativo: boolean; vendedor_padrao_id: string | null;
+  id: string; nome: string; csv_url: string; ativo: boolean; vendedor_padrao_id: string | null; roleta: boolean;
   ultima_sync: string | null; ultimo_resultado: string | null;
 };
 
 export default function Planilhas() {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [planilhas, setPlanilhas] = useState<Planilha[]>([]);
-  const [nova, setNova] = useState({ nome: "", csv_url: "", vendedor_padrao_id: "" });
+  const [nova, setNova] = useState({ nome: "", csv_url: "", distribuicao: "roleta" });
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
-  const [padraoArquivo, setPadraoArquivo] = useState("");
+  const [padraoArquivo, setPadraoArquivo] = useState("roleta");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const [script, setScript] = useState<Planilha | null>(null);
@@ -30,7 +30,7 @@ export default function Planilhas() {
     const r = await fetch("/api/planilhas", { method: "POST", body: JSON.stringify(nova) });
     const j = await r.json();
     if (!r.ok) return setMsg(`Erro: ${j.error}`);
-    setNova({ nome: "", csv_url: "", vendedor_padrao_id: "" });
+    setNova({ nome: "", csv_url: "", distribuicao: "roleta" });
     setMsg("Planilha cadastrada. Clique em Sincronizar para puxar os leads.");
     load();
   }
@@ -43,8 +43,10 @@ export default function Planilhas() {
     load();
   }
 
-  async function alterar(p: Planilha, patch: Partial<Planilha>) {
-    await fetch("/api/planilhas", { method: "PATCH", body: JSON.stringify({ ...p, ...patch }) });
+  const distDe = (p: Planilha) => (p.roleta ? "roleta" : p.vendedor_padrao_id ?? "");
+
+  async function alterar(p: Planilha, patch: { ativo?: boolean; distribuicao?: string }) {
+    await fetch("/api/planilhas", { method: "PATCH", body: JSON.stringify({ id: p.id, ativo: p.ativo, distribuicao: distDe(p), ...patch }) });
     load();
   }
 
@@ -64,7 +66,7 @@ export default function Planilhas() {
 
   async function importar() {
     setBusy(true);
-    const r = await (await fetch("/api/import", { method: "POST", body: JSON.stringify({ rows, vendedor_padrao_id: padraoArquivo }) })).json();
+    const r = await (await fetch("/api/import", { method: "POST", body: JSON.stringify({ rows, distribuicao: padraoArquivo }) })).json();
     setBusy(false);
     setMsg(r.error ? `Erro: ${r.error}` : `✔ ${r.gravados} leads gravados/atualizados, ${r.ignorados} ignorados (sem nome ou contato).`);
     if (!r.error) setRows([]);
@@ -72,8 +74,9 @@ export default function Planilhas() {
 
   const selVendedor = (value: string, onChange: (v: string) => void) => (
     <select value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">Sem vendedor padrão (admin distribui)</option>
-      {vendedores.map((v) => <option key={v.id} value={v.id}>{v.nome}</option>)}
+      <option value="roleta">🎰 Roleta (rodízio entre vendedores)</option>
+      <option value="">✋ Manual (admin distribui no kanban)</option>
+      {vendedores.map((v) => <option key={v.id} value={v.id}>👤 Tudo para {v.nome}</option>)}
     </select>
   );
 
@@ -85,12 +88,12 @@ export default function Planilhas() {
       <div className="card" style={{ marginBottom: 16 }}>
         <h3 style={{ marginTop: 0 }}>Google Sheets cadastradas</h3>
         <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
-          <thead><tr style={{ textAlign: "left" }}><th>Nome</th><th>Vendedor padrão</th><th>Última sincronização</th><th>Ativa</th><th></th></tr></thead>
+          <thead><tr style={{ textAlign: "left" }}><th>Nome</th><th>Distribuição dos leads novos</th><th>Última sincronização</th><th>Ativa</th><th></th></tr></thead>
           <tbody>
             {planilhas.map((p) => (
               <tr key={p.id} style={{ borderTop: "1px solid #eee" }}>
                 <td style={{ padding: 6 }}>{p.nome}</td>
-                <td style={{ padding: 6 }}>{selVendedor(p.vendedor_padrao_id ?? "", (v) => alterar(p, { vendedor_padrao_id: v }))}</td>
+                <td style={{ padding: 6 }}>{selVendedor(distDe(p), (v) => alterar(p, { distribuicao: v }))}</td>
                 <td style={{ padding: 6 }}>
                   {p.ultima_sync ? new Date(p.ultima_sync).toLocaleString("pt-BR") : "nunca"}
                   <br /><small style={{ color: "#666" }}>{p.ultimo_resultado}</small>
@@ -110,12 +113,12 @@ export default function Planilhas() {
         <form onSubmit={cadastrar} style={{ display: "grid", gridTemplateColumns: "1fr 2fr 1.3fr auto", gap: 8, marginTop: 16 }}>
           <input placeholder="Nome (ex: Leads Facebook)" value={nova.nome} onChange={(e) => setNova({ ...nova, nome: e.target.value })} required />
           <input placeholder="Link CSV publicado (Arquivo > Compartilhar > Publicar na web > CSV)" value={nova.csv_url} onChange={(e) => setNova({ ...nova, csv_url: e.target.value })} required />
-          {selVendedor(nova.vendedor_padrao_id, (v) => setNova({ ...nova, vendedor_padrao_id: v }))}
+          {selVendedor(nova.distribuicao, (v) => setNova({ ...nova, distribuicao: v }))}
           <button className="btn">Cadastrar</button>
         </form>
         <p style={{ fontSize: 12, color: "#666" }}>
           Colunas reconhecidas: nome, telefone/celular/whatsapp, email, cidade, interesse, valor, observacoes, id e <b>vendedor</b> (nome ou e-mail do vendedor).
-          Leads sem a coluna vendedor vão para o vendedor padrão. Todas as planilhas ativas também sincronizam automaticamente 1x por dia.
+          Leads sem a coluna vendedor seguem a distribuição escolhida (roleta, vendedor fixo ou manual); lead que já tem dono nunca muda sozinho. Todas as planilhas ativas também sincronizam automaticamente 1x por dia.
         </p>
       </div>
 

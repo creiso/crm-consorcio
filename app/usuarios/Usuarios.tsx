@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 
-type Usuario = { id: string; nome: string; email: string | null; papel: string; ativo: boolean };
+type Usuario = { id: string; nome: string; email: string | null; papel: string; ativo: boolean; na_roleta: boolean };
 
 export default function Usuarios() {
   const [lista, setLista] = useState<Usuario[]>([]);
@@ -21,8 +21,8 @@ export default function Usuarios() {
     load();
   }
 
-  async function ativar(u: Usuario, ativo: boolean) {
-    const r = await fetch("/api/usuarios", { method: "PATCH", body: JSON.stringify({ id: u.id, ativo }) });
+  async function alterar(u: Usuario, patch: { ativo?: boolean; na_roleta?: boolean }) {
+    const r = await fetch("/api/usuarios", { method: "PATCH", body: JSON.stringify({ id: u.id, ...patch }) });
     if (!r.ok) setMsg(`Erro: ${(await r.json()).error}`);
     load();
   }
@@ -45,14 +45,17 @@ export default function Usuarios() {
         </form>
         <div className="card">
           <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
-            <thead><tr style={{ textAlign: "left" }}><th>Nome</th><th>E-mail</th><th>Nível</th><th>Ativo</th></tr></thead>
+            <thead><tr style={{ textAlign: "left" }}><th>Nome</th><th>E-mail</th><th>Nível</th><th>Na roleta</th><th>Ativo</th></tr></thead>
             <tbody>
               {lista.map((u) => (
                 <tr key={u.id} style={{ borderTop: "1px solid #eee" }}>
                   <td style={{ padding: 6 }}>{u.nome}</td>
                   <td style={{ padding: 6 }}>{u.email}</td>
                   <td style={{ padding: 6 }}>{u.papel}</td>
-                  <td style={{ padding: 6 }}><input type="checkbox" style={{ width: "auto" }} checked={u.ativo} onChange={(e) => ativar(u, e.target.checked)} /></td>
+                  <td style={{ padding: 6 }}>
+                    {u.papel === "vendedor" && <input type="checkbox" style={{ width: "auto" }} checked={u.na_roleta} onChange={(e) => alterar(u, { na_roleta: e.target.checked })} />}
+                  </td>
+                  <td style={{ padding: 6 }}><input type="checkbox" style={{ width: "auto" }} checked={u.ativo} onChange={(e) => alterar(u, { ativo: e.target.checked })} /></td>
                 </tr>
               ))}
             </tbody>

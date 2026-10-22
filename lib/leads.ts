@@ -58,8 +58,35 @@ export function toLead(row: Row, origem: string) {
   };
 }
 
-// vendedorPadraoId: atribuído aos leads NOVOS sem coluna "vendedor" (leads existentes mantêm o dono).
-export async function upsertLeads(rows: Row[], origem: string, vendedorPadraoId?: string | null) {
+// Distribuição dos leads sem dono (leads que já têm vendedor nunca mudam de dono):
+// "roleta" = rodízio entre vendedores ativos na roleta; um id = vendedor fixo; null = admin distribui manualmente.
+export type Distribuicao = "roleta" | string | null | undefined;
+
+async function rodarRoleta(leadIds: string[]) {
+  const supa = db();
+  const { data: fila } = await supa.from("vendedores").select("id")
+    .eq("papel", "vendedor").eq("ativo", true).eq("na_roleta", true)
+    .order("ultimo_lead_em", { ascending: true, nullsFirst: true });
+  if (!fila?.length || !leadIds.length) return;
+
+  const porVendedor = new Map<string, string[]>();
+  leadIds.forEach((id, i) => {
+    const v = fila[i % fila.length].id;
+    porVendedor.set(v, [...(porVendedor.get(v) ?? []), id]);
+  });
+  // quem recebeu o último lead vai para o fim da fila
+  const base = Date.now();
+  for (const v of fila) {
+    const ids = porVendedor.get(v.id);
+    if (!ids) continue;
+    for (let j = 0; j < ids.length; j += 200)
+      await supa.from("leads").update({ vendedor_id: v.id }).in("id", ids.slice(j, j + 200)).is("vendedor_id", null);
+    const ultimaPosicao = leadIds.lastIndexOf(ids[ids.length - 1]);
+    await supa.from("vendedores").update({ ultimo_lead_em: new Date(base + ultimaPosicao).toISOString() }).eq("id", v.id);
+  }
+}
+
+export async function upsertLeads(rows: Row[], origem: string, distribuicao?: Distribuicao) {
   const supa = db();
   const { data: vendedores } = await supa.from("vendedores").select("id, nome, email");
   const acharVendedor = (v?: string) => {
@@ -88,11 +115,19 @@ export async function upsertLeads(rows: Row[], origem: string, vendedorPadraoId?
     const { error } = await supa.from("leads").upsert(lote, { onConflict: "external_key" });
     if (error) throw new Error(error.message);
   }
-  if (vendedorPadraoId) {
+  if (distribuicao && semVendedor.length) {
+    // só os que continuam sem dono depois do upsert (novos ou nunca atribuídos)
+    const orfaos: string[] = [];
     for (let i = 0; i < semVendedor.length; i += 200) {
-      await supa.from("leads").update({ vendedor_id: vendedorPadraoId })
-        .in("external_key", semVendedor.slice(i, i + 200).map((l) => l.external_key)).is("vendedor_id", null);
+      const { data } = await supa.from("leads").select("id")
+        .in("external_key", semVendedor.slice(i, i + 200).map((l) => l.external_key)).is("vendedor_id", null)
+        .order("created_at");
+      orfaos.push(...(data ?? []).map((d) => d.id));
     }
+    if (distribuicao === "roleta") await rodarRoleta(orfaos);
+    else
+      for (let i = 0; i < orfaos.length; i += 200)
+        await supa.from("leads").update({ vendedor_id: distribuicao }).in("id", orfaos.slice(i, i + 200));
   }
   return { recebidos: rows.length, gravados: unique.length, ignorados: rows.length - leads.length };
 }

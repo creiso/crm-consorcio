@@ -1,6 +1,7 @@
 import { db, brl } from "@/lib/supabase";
 import PagamentoTag from "./PagamentoTag";
 import { exigirPerfil } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,8 @@ export default async function Dashboard({ searchParams }: { searchParams: { mes?
   const fim = new Date(inicio.getFullYear(), inicio.getMonth() + 1, 1);
 
   const perfil = await exigirPerfil();
-  const admin = perfil.papel === "admin";
+  if (perfil.papel !== "admin") redirect("/kanban"); // vendedor só usa o kanban
+  const admin = true;
 
   const supa = db();
   const vendasQ = supa.from("vendas")

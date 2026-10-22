@@ -6,10 +6,10 @@ import { perfilApi } from "@/lib/auth";
 export async function POST(req: Request) {
   const p = await perfilApi("admin");
   if (p instanceof NextResponse) return p;
-  const { rows, vendedor_padrao_id } = await req.json();
+  const { rows, distribuicao } = await req.json();
   if (!Array.isArray(rows)) return NextResponse.json({ error: "rows inválido" }, { status: 400 });
   try {
-    return NextResponse.json(await upsertLeads(rows, "planilha", vendedor_padrao_id || null));
+    return NextResponse.json(await upsertLeads(rows, "planilha", distribuicao || null));
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

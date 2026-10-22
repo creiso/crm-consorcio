@@ -6,7 +6,9 @@ import { perfilApi } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-type Planilha = { id: string; nome: string; csv_url: string; vendedor_padrao_id: string | null };
+type Planilha = { id: string; nome: string; csv_url: string; vendedor_padrao_id: string | null; roleta: boolean };
+
+const distribuicao = (p: { roleta: boolean; vendedor_padrao_id: string | null }) => (p.roleta ? "roleta" : p.vendedor_padrao_id);
 
 async function sincronizar(p: Planilha) {
   let resultado: string;
@@ -15,7 +17,7 @@ async function sincronizar(p: Planilha) {
     if (!resp.ok) throw new Error(`planilha respondeu ${resp.status}`);
     const wb = XLSX.read(await resp.text(), { type: "string" });
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]]);
-    const r = await upsertLeads(rows, `sheets:${p.id}`, p.vendedor_padrao_id);
+    const r = await upsertLeads(rows, `sheets:${p.id}`, distribuicao(p));
     resultado = `${r.gravados} leads sincronizados, ${r.ignorados} ignorados`;
   } catch (e) {
     resultado = `Erro: ${(e as Error).message}`;
@@ -28,7 +30,7 @@ async function sincronizar(p: Planilha) {
 // GET ?id=...: botão "Sincronizar agora" do admin.
 export async function GET(req: Request) {
   const id = new URL(req.url).searchParams.get("id");
-  const query = db().from("planilhas").select("id, nome, csv_url, vendedor_padrao_id").eq("ativo", true);
+  const query = db().from("planilhas").select("id, nome, csv_url, vendedor_padrao_id, roleta").eq("ativo", true);
 
   if (id) {
     const p = await perfilApi("admin");
@@ -49,12 +51,12 @@ export async function POST(req: Request) {
   if (req.headers.get("x-sync-secret") !== process.env.SYNC_SECRET)
     return NextResponse.json({ error: "não autorizado" }, { status: 401 });
   const planilhaId = new URL(req.url).searchParams.get("planilha");
-  const { data: p } = await db().from("planilhas").select("id, vendedor_padrao_id").eq("id", planilhaId ?? "").maybeSingle();
+  const { data: p } = await db().from("planilhas").select("id, vendedor_padrao_id, roleta").eq("id", planilhaId ?? "").maybeSingle();
   if (!p) return NextResponse.json({ error: "planilha não cadastrada" }, { status: 404 });
 
   const { rows } = await req.json();
   try {
-    return NextResponse.json(await upsertLeads(rows ?? [], `sheets:${p.id}`, p.vendedor_padrao_id));
+    return NextResponse.json(await upsertLeads(rows ?? [], `sheets:${p.id}`, distribuicao(p)));
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
