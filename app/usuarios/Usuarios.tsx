@@ -59,7 +59,7 @@ export default function Usuarios() {
           <input type="email" placeholder="E-mail" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required />
           <input type="text" placeholder="Senha inicial (mín. 8)" value={f.senha} onChange={(e) => setF({ ...f, senha: e.target.value })} required minLength={8} />
           <select value={f.papel} onChange={(e) => setF({ ...f, papel: e.target.value })}>
-            <option value="vendedor">Vendedor — atende os próprios leads</option>
+            <option value="vendedor">Consultor — atende os próprios leads</option>
             <option value="coordenador">Coordenador — lidera uma equipe, fora da roleta</option>
             <option value="admin">Administrador — vê tudo e cadastra</option>
           </select>
@@ -86,7 +86,7 @@ export default function Usuarios() {
                   </td>
                   <td style={{ padding: 6, minWidth: 140 }}>
                     <select value={u.papel} onChange={(e) => alterar(u, { papel: e.target.value })}>
-                      <option value="vendedor">Vendedor</option>
+                      <option value="vendedor">Consultor</option>
                       <option value="coordenador">Coordenador</option>
                       <option value="admin">Administrador</option>
                     </select>

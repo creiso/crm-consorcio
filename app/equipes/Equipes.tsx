@@ -80,12 +80,12 @@ export default function Equipes() {
               ) : (
                 <div className="card-tit" style={{ marginBottom: 12 }}>
                   <h3>{eq.nome}</h3>
-                  <span>{vendedores.length} {vendedores.length === 1 ? "vendedor" : "vendedores"}</span>
+                  <span>{vendedores.length} {vendedores.length === 1 ? "consultor" : "consultores"}</span>
                 </div>
               )}
               <div className="det-label">Coordenação</div>
               <div className="equipe-pessoas">{pessoas(coords)}</div>
-              <div className="det-label">Vendedores</div>
+              <div className="det-label">Consultores</div>
               <div className="equipe-pessoas">{pessoas(vendedores)}</div>
               <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                 <button className="btn secondary" onClick={() => setEditando({ id: eq.id, nome: eq.nome })}>Renomear</button>

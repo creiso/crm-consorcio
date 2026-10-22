@@ -153,10 +153,10 @@ export default function DashboardView(d: DashProps) {
 
         <div className="card">
           <div className="card-tit">
-            <h3>Ranking de vendedores</h3>
+            <h3>Ranking de consultores</h3>
             <Link href={placarHref}>Ver placar →</Link>
           </div>
-          {d.placar.length === 0 && <div className="vazio">Cadastre vendedores em Usuários.</div>}
+          {d.placar.length === 0 && <div className="vazio">Cadastre consultores em Usuários.</div>}
           {d.placar.slice(0, 8).map((r, i) => (
             <div key={r.id} className="rank-linha" title={`${r.nome}: ${brl(r.total)} em ${cotasTxt(r.qtd)}`}>
               <span className="rank-pos">{r.total > 0 && i < 3 ? MEDALHA[i] : `${i + 1}º`}</span>
@@ -168,7 +168,7 @@ export default function DashboardView(d: DashProps) {
               <span className="rank-valor">{brl(r.total)}</span>
             </div>
           ))}
-          {d.placar.length > 8 && <div className="card-tit" style={{ margin: "8px 0 0" }}><span>+{d.placar.length - 8} vendedores no placar</span></div>}
+          {d.placar.length > 8 && <div className="card-tit" style={{ margin: "8px 0 0" }}><span>+{d.placar.length - 8} consultores no placar</span></div>}
         </div>
       </div>
 
@@ -185,7 +185,7 @@ export default function DashboardView(d: DashProps) {
                 <span className="rank-pos">{e.total > 0 && i < 3 ? MEDALHA[i] : `${i + 1}º`}</span>
                 <span className="equipe-badge">{siglaEquipe(e.nome)}</span>
                 <div style={{ minWidth: 0 }}>
-                  <div className="rank-nome">{e.nome}<small>{cotasTxt(e.qtd)} · {e.membros} {e.membros === 1 ? "vendedor" : "vendedores"}</small></div>
+                  <div className="rank-nome">{e.nome}<small>{cotasTxt(e.qtd)} · {e.membros} {e.membros === 1 ? "consultor" : "consultores"}</small></div>
                   <div className="rank-trilho">{e.total > 0 && <div className="rank-barra" style={{ width: `${(e.total / liderEquipes) * 100}%` }} />}</div>
                 </div>
                 <span className="rank-valor">{brl(e.total)}</span>

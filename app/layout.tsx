@@ -8,7 +8,8 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
 
 export const metadata = { title: "CRM Consórcio" };
 
-const NIVEL = { admin: "Administrador", coordenador: "Coordenador", vendedor: "Vendedor" } as const;
+// na tela o papel "vendedor" do banco aparece como Consultor
+const NIVEL = { admin: "Administrador", coordenador: "Coordenador", vendedor: "Consultor" } as const;
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const perfil = await getPerfil();

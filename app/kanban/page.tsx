@@ -206,7 +206,7 @@ export default function Kanban() {
                         {wa && <a href={wa} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title="WhatsApp" className="ico-wa">💬</a>}
                         {l.vendedores
                           ? <Avatar nome={l.vendedores.nome} foto={l.vendedores.foto_url} />
-                          : <span className="avatar vazio" title="Sem vendedor">!</span>}
+                          : <span className="avatar vazio" title="Sem consultor">!</span>}
                       </span>
                     </div>
                   </div>
@@ -303,11 +303,11 @@ function Detalhe({ lead, lider, mostrarEquipe, vendedores, nomeEquipe, onClose, 
             <label className="det-label">Equipe</label>
             <b>{lead.equipes?.nome ?? "Sem equipe"}</b>
           </>}
-          <label className="det-label">Vendedor</label>
+          <label className="det-label">Consultor</label>
           {lider ? (
             <select value={lead.vendedor_id ?? ""} onChange={(e) => onVendedor(e.target.value)}
               style={{ borderColor: lead.vendedor_id ? "#ccc" : "#e3262f" }}>
-              <option value="">⚠ Sem vendedor</option>
+              <option value="">⚠ Sem consultor</option>
               {vendedores.map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.nome}{v.papel === "coordenador" ? " (coord.)" : ""}{mostrarEquipe && nomeEquipe(v.equipe_id) ? ` — ${nomeEquipe(v.equipe_id)}` : ""}
@@ -353,7 +353,7 @@ function VendaModal({ lead, vendedores, onClose, onSaved }: {
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h3 style={{ margin: 0 }}>Registrar venda — {lead.nome}</h3>
         <select value={f.vendedor_id} onChange={set("vendedor_id")}>
-          <option value="">Vendedor que realizou…</option>
+          <option value="">Consultor que realizou…</option>
           {vendedores.map((v) => <option key={v.id} value={v.id}>{v.nome}</option>)}
         </select>
         <input placeholder="Valor do consórcio (ex: 100000,00)" value={f.valor} onChange={set("valor")} />

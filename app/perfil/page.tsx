@@ -2,7 +2,8 @@ import { exigirPerfil } from "@/lib/auth";
 import { db } from "@/lib/supabase";
 import FotoUpload from "../FotoUpload";
 
-const NIVEL = { admin: "Administrador", coordenador: "Coordenador", vendedor: "Vendedor" } as const;
+// na tela o papel "vendedor" do banco aparece como Consultor
+const NIVEL = { admin: "Administrador", coordenador: "Coordenador", vendedor: "Consultor" } as const;
 
 export default async function Perfil() {
   const p = await exigirPerfil();

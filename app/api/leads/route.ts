@@ -78,7 +78,7 @@ export async function PATCH(req: Request) {
     if (vendedor_id) {
       const { data: alvo } = await supa.from("vendedores").select("id, equipe_id").eq("id", vendedor_id).eq("ativo", true).maybeSingle();
       if (!alvo || (p.papel === "coordenador" && alvo.equipe_id !== p.equipe_id))
-        return NextResponse.json({ error: "esse vendedor não está na sua equipe" }, { status: 403 });
+        return NextResponse.json({ error: "esse consultor não está na sua equipe" }, { status: 403 });
       patch.vendedor_id = alvo.id;
       patch.equipe_id = alvo.equipe_id; // o lead acompanha a equipe do dono
     } else {

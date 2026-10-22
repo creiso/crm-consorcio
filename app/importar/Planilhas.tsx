@@ -16,9 +16,9 @@ const PADRAO: Dist = { modo: "automatica", equipes: [] };
 function resumo(d: Dist, equipes: Equipe[]) {
   const nomes = d.equipes.map((id) => equipes.find((e) => e.id === id)?.nome ?? "?");
   const alvo = nomes.length ? nomes.join(", ") : "todas as equipes";
-  if (d.modo === "automatica") return `Roleta entre os vendedores de ${alvo} (coordenadores não entram).`;
-  if (nomes.length === 1) return `Os leads ficam sem vendedor na equipe ${nomes[0]}; o coordenador dela ou o admin distribuem no Kanban.`;
-  return "Os leads ficam sem vendedor e sem equipe; o admin distribui no Kanban.";
+  if (d.modo === "automatica") return `Roleta entre os consultores de ${alvo} (coordenadores não entram).`;
+  if (nomes.length === 1) return `Os leads ficam sem consultor na equipe ${nomes[0]}; o coordenador dela ou o admin distribuem no Kanban.`;
+  return "Os leads ficam sem consultor e sem equipe; o admin distribui no Kanban.";
 }
 
 function DistribuicaoEditor({ valor, equipes, onChange }: { valor: Dist; equipes: Equipe[]; onChange: (d: Dist) => void }) {
@@ -170,7 +170,7 @@ export default function Planilhas() {
         <p style={{ fontSize: 12, color: "var(--muted)" }}>
           Padrão do formulário de leads do Facebook/Instagram reconhecido automaticamente: id, created_time, campaign_name, adset_name, ad_name,
           form_name, platform, você_sabe_como_funciona_o_consórcio?, <b>qual_sua_renda_mensal?</b> ou <b>valor_do_consorcio</b>, nome_completo, telefone e cidade.
-          Também aceita email, observacoes e <b>vendedor</b> (nome ou e-mail do vendedor; o lead já chega com esse dono). As demais colunas ficam guardadas no lead.
+          Também aceita email, observacoes e <b>consultor</b> (nome ou e-mail do consultor; o lead já chega com esse dono). As demais colunas ficam guardadas no lead.
           Lead que já tem dono nunca muda sozinho. Antes de cadastrar, no Google Sheets clique em <b>Compartilhar → Acesso geral → Qualquer pessoa com o link → Leitor</b>.
           Se a planilha tiver várias abas, abra a aba certa antes de copiar o link. Todas as planilhas ativas sincronizam sozinhas a cada 1 minuto.
         </p>
@@ -203,7 +203,7 @@ export default function Planilhas() {
           <div className="modal" style={{ width: 460 }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: 0 }}>Distribuição — {editando.nome}</h3>
             <DistribuicaoEditor valor={editando} equipes={equipes} onChange={(d) => setEditando({ ...editando, ...d })} />
-            <small style={{ color: "var(--muted)" }}>Vale para os leads novos e para os que ainda estão sem vendedor. Quem já tem dono não muda.</small>
+            <small style={{ color: "var(--muted)" }}>Vale para os leads novos e para os que ainda estão sem consultor. Quem já tem dono não muda.</small>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button className="btn secondary" onClick={() => setEditando(null)}>Cancelar</button>
               <button className="btn" onClick={() => salvar(editando)}>Salvar</button>

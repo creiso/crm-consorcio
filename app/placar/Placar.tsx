@@ -153,7 +153,7 @@ export default function Placar({ equipeInicial }: { equipeInicial: string }) {
 
       <main className="pl-corpo">
         <section className="pl-ranking">
-          {rank.length === 0 && dados && <div className="pl-vazio">Nenhum vendedor {dados.equipe ? "nesta equipe" : "cadastrado"} ainda.</div>}
+          {rank.length === 0 && dados && <div className="pl-vazio">Nenhum consultor {dados.equipe ? "nesta equipe" : "cadastrado"} ainda.</div>}
           {rank.length > 0 && podio.length === 0 && (
             <div className="pl-vazio">Ninguém vendeu {periodo === "hoje" ? "hoje" : "neste mês"} ainda.<br />A primeira venda abre o placar! 🚀</div>
           )}
@@ -194,7 +194,7 @@ export default function Placar({ equipeInicial }: { equipeInicial: string }) {
                   </div>
                 );
               })}
-              {resto.length > lista.length && <div className="pl-mais">+{resto.length - lista.length} vendedores</div>}
+              {resto.length > lista.length && <div className="pl-mais">+{resto.length - lista.length} consultores</div>}
             </div>
           )}
         </section>

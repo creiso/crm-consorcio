@@ -12,18 +12,18 @@ export async function POST(req: Request) {
   const { lead_id, valor, tipo, grupo, cota } = body;
   const vendedor_id = p.papel === "vendedor" ? p.id : body.vendedor_id;
   if (!lead_id || !vendedor_id || !(Number(valor) > 0))
-    return NextResponse.json({ error: "lead, vendedor e valor são obrigatórios" }, { status: 400 });
+    return NextResponse.json({ error: "lead, consultor e valor são obrigatórios" }, { status: 400 });
 
   const supa = db();
   const [{ data: lead }, { data: vendedor }] = await Promise.all([
     supa.from("leads").select("id, vendedor_id, equipe_id").eq("id", lead_id).maybeSingle(),
     supa.from("vendedores").select("id, equipe_id").eq("id", vendedor_id).eq("ativo", true).maybeSingle(),
   ]);
-  if (!lead || !vendedor) return NextResponse.json({ error: "lead ou vendedor não encontrado" }, { status: 404 });
+  if (!lead || !vendedor) return NextResponse.json({ error: "lead ou consultor não encontrado" }, { status: 404 });
   if (p.papel === "vendedor" && lead.vendedor_id !== p.id)
     return NextResponse.json({ error: "lead não é seu" }, { status: 403 });
   if (p.papel === "coordenador" && (lead.equipe_id !== p.equipe_id || vendedor.equipe_id !== p.equipe_id))
-    return NextResponse.json({ error: "lead ou vendedor fora da sua equipe" }, { status: 403 });
+    return NextResponse.json({ error: "lead ou consultor fora da sua equipe" }, { status: 403 });
 
   const venda = await supa
     .from("vendas")
