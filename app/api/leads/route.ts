@@ -16,6 +16,17 @@ export async function GET(req: Request) {
   const filtroEquipe = p.papel === "admin" ? params.get("equipe") : null;
   const supa = db();
 
+  // consultores e equipes (para distribuir e filtrar) vêm junto com as colunas, em paralelo
+  const vendedoresQ = supa.from("vendedores").select("id, nome, papel, equipe_id").eq("ativo", true).order("nome");
+  if (p.papel === "coordenador") vendedoresQ.eq("equipe_id", p.equipe_id ?? "00000000-0000-0000-0000-000000000000");
+  type Pessoa = { id: string; nome: string; papel: string; equipe_id: string | null };
+  const extras: Promise<[Pessoa[], { id: string; nome: string }[]]> = p.papel === "vendedor"
+    ? Promise.resolve([[{ id: p.id, nome: p.nome, papel: p.papel, equipe_id: p.equipe_id }], []])
+    : Promise.all([
+      vendedoresQ.then((r) => (r.data ?? []) as Pessoa[]),
+      supa.from("equipes").select("id, nome").order("nome").then((r) => r.data ?? []),
+    ]);
+
   const colunas = await Promise.all(
     STATUSES.map(async (s) => {
       const limite = Math.min(Math.max(Number(params.get(s.id)) || 50, 1), 1000);
@@ -34,15 +45,7 @@ export async function GET(req: Request) {
   if (colunas instanceof Error) return NextResponse.json({ error: colunas.message }, { status: 500 });
 
   // para quem o lead pode ser passado: admin → qualquer um ativo; coordenador → a própria equipe
-  let vendedores: { id: string; nome: string; papel: string; equipe_id: string | null }[] = [{ id: p.id, nome: p.nome, papel: p.papel, equipe_id: p.equipe_id }];
-  if (p.papel !== "vendedor") {
-    const v = supa.from("vendedores").select("id, nome, papel, equipe_id").eq("ativo", true).order("nome");
-    if (p.papel === "coordenador") v.eq("equipe_id", p.equipe_id ?? "00000000-0000-0000-0000-000000000000");
-    vendedores = (await v).data ?? [];
-  }
-  const { data: equipes } = p.papel === "vendedor"
-    ? { data: [] }
-    : await supa.from("equipes").select("id, nome").order("nome");
+  const [vendedores, equipes] = await extras;
 
   return NextResponse.json({
     leads: colunas.flatMap((c) => c.leads),

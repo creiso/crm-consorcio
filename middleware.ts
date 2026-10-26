@@ -2,6 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 
 // Renova a sessão do Supabase e manda quem não está logado para /login.
+// Aqui basta ler a sessão do cookie (sem ir ao servidor de login a cada clique): quem libera dados
+// de verdade é o getUser() das páginas e das rotas de API, que valida o login no Supabase.
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   // Webhook do Apps Script e cron da Vercel autenticam por segredo próprio.
@@ -18,7 +20,8 @@ export async function middleware(req: NextRequest) {
       },
     },
   });
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
 
   const publica = pathname === "/login" || pathname === "/setup" || pathname === "/api/setup";
   if (!user && !publica) {
