@@ -2,7 +2,7 @@ import { db, STATUSES } from "@/lib/supabase";
 import { exigirPerfil } from "@/lib/auth";
 import {
   intervaloMes, mesAnterior, mesAtualBR, nomeMes, hojeBR, diaBR,
-  vendasEntre, validas, soma, ranking, rankingEquipes, listarEquipes,
+  vendasEntre, validas, soma, ranking, rankingEquipes, listarEquipes, temposAtendimento,
 } from "@/lib/painel";
 import DashboardView from "./DashboardView";
 import type { Dia } from "./VendasPorDia";
@@ -61,7 +61,11 @@ export default async function Dashboard({ searchParams }: { searchParams: { mes?
     if (d) { d.total += Number(v.valor); d.qtd += 1; }
   }
 
-  const [placar, placarEquipes] = await Promise.all([ranking(vendasMes, equipeId), rankingEquipes(todasDoMes ?? vendasMes)]);
+  const [placar, placarEquipes, tempos] = await Promise.all([
+    ranking(vendasMes, equipeId),
+    rankingEquipes(todasDoMes ?? vendasMes),
+    temposAtendimento(atual.inicio, atual.fim, equipeId),
+  ]);
 
   return (
     <DashboardView
@@ -76,6 +80,7 @@ export default async function Dashboard({ searchParams }: { searchParams: { mes?
       dias={dias} hoje={ehMesAtual ? Number(hojeBR().slice(8, 10)) : null}
       placar={placar}
       placarEquipes={placarEquipes}
+      tempos={tempos}
       etapas={STATUSES.map((s, i) => ({ id: s.id, label: s.label, qtd: porEtapa[i] }))} leadsMes={leadsMes}
       vendas={vendasMes}
       equipeAtual={equipes.find((e) => e.id === equipeId) ?? null}

@@ -101,3 +101,82 @@ export async function rankingEquipes(vendas: VendaPainel[]): Promise<LinhaEquipe
 // Valores compactos para eixos e telas grandes: R$ 250 mil, R$ 1,2 mi.
 export const brlCompacto = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", notation: "compact", maximumFractionDigits: 1 }).format(v);
+
+export type LinhaTempo = {
+  id: string; nome: string; foto_url: string | null;
+  mediana: number | null; qtd: number;        // minutos até o 1º atendimento, leads atendidos no período
+  fila: number; esperaMaisAntiga: number | null; // leads parados em "Lead" agora e há quanto tempo (min)
+};
+export type TemposAtendimento = { linhas: LinhaTempo[]; medianaGeral: number | null };
+
+// Expediente (horário de Brasília), em minutos do dia, por dia da semana (0 = domingo):
+// seg a sex 8h30–18h30, sábado 8h–12h, domingo fechado.
+const EXPEDIENTE: ([number, number] | null)[] = [null, [510, 1110], [510, 1110], [510, 1110], [510, 1110], [510, 1110], [480, 720]];
+const DIA_MS = 86400000;
+
+// Minutos de expediente entre dois instantes: fora do horário comercial o relógio fica parado.
+export function minutosUteis(inicio: Date, fim: Date) {
+  const a = inicio.getTime() - OFFSET_H * 3600000, b = fim.getTime() - OFFSET_H * 3600000; // relógio de Brasília
+  if (b <= a) return 0;
+  let total = 0;
+  for (let dia = Math.floor(a / DIA_MS), ultimo = Math.min(Math.floor(b / DIA_MS), dia + 400); dia <= ultimo; dia++) {
+    const j = EXPEDIENTE[new Date(dia * DIA_MS).getUTCDay()];
+    if (!j) continue;
+    total += Math.max(0, Math.min(b, dia * DIA_MS + j[1] * 60000) - Math.max(a, dia * DIA_MS + j[0] * 60000));
+  }
+  return total / 60000;
+}
+
+const mediana = (v: number[]) => {
+  if (!v.length) return null;
+  const s = [...v].sort((a, b) => a - b), m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+
+// Tempo entre o lead chegar no consultor (atribuido_em) e sair da coluna Lead pela 1ª vez (atendido_em),
+// contando só o horário comercial.
+// Mediana, para uma madrugada sem resposta não distorcer a média. null = SQL 008 ainda não rodou.
+export async function temposAtendimento(inicio: Date, fim: Date, equipeId: string | null): Promise<TemposAtendimento | null> {
+  const supa = db();
+  const atendidos = supa.from("leads").select("atribuido_em, atendido_em, atendido_por")
+    .gte("atendido_em", inicio.toISOString()).lt("atendido_em", fim.toISOString())
+    .not("atribuido_em", "is", null).not("atendido_por", "is", null).limit(10000);
+  const fila = supa.from("leads").select("vendedor_id, atribuido_em")
+    .eq("status", "lead").not("vendedor_id", "is", null).limit(10000);
+  const equipe = supa.from("vendedores").select("id, nome, foto_url").eq("ativo", true).eq("papel", "vendedor");
+  if (equipeId) { atendidos.eq("equipe_id", equipeId); fila.eq("equipe_id", equipeId); equipe.eq("equipe_id", equipeId); }
+  const [a, f, e] = await Promise.all([atendidos, fila, equipe]);
+  if (a.error || f.error) return null;
+
+  const minutos = new Map<string, number[]>();
+  for (const l of a.data ?? []) {
+    const m = minutosUteis(new Date(l.atribuido_em), new Date(l.atendido_em));
+    minutos.set(l.atendido_por, [...(minutos.get(l.atendido_por) ?? []), m]);
+  }
+  const agora = new Date();
+  const naFila = new Map<string, { qtd: number; maisAntigo: number | null }>();
+  for (const l of f.data ?? []) {
+    const atual = naFila.get(l.vendedor_id) ?? { qtd: 0, maisAntigo: null };
+    const espera = l.atribuido_em ? minutosUteis(new Date(l.atribuido_em), agora) : null;
+    naFila.set(l.vendedor_id, { qtd: atual.qtd + 1, maisAntigo: espera !== null ? Math.max(atual.maisAntigo ?? 0, espera) : atual.maisAntigo });
+  }
+
+  // consultores da equipe + quem atendeu no período mas saiu dela/ficou inativo
+  const pessoas = new Map((e.data ?? []).map((p) => [p.id, p]));
+  const faltam = [...minutos.keys(), ...naFila.keys()].filter((id) => !pessoas.has(id));
+  if (faltam.length) {
+    const { data } = await supa.from("vendedores").select("id, nome, foto_url").in("id", [...new Set(faltam)]);
+    for (const p of data ?? []) pessoas.set(p.id, p);
+  }
+
+  const linhas = [...pessoas.values()].map((p) => ({
+    ...p,
+    mediana: mediana(minutos.get(p.id) ?? []),
+    qtd: minutos.get(p.id)?.length ?? 0,
+    fila: naFila.get(p.id)?.qtd ?? 0,
+    esperaMaisAntiga: naFila.get(p.id)?.maisAntigo ?? null,
+  }));
+  // mais rápido primeiro; quem ainda não tem atendimento no período vai para o fim
+  linhas.sort((x, y) => (x.mediana ?? Infinity) - (y.mediana ?? Infinity) || y.qtd - x.qtd || x.nome.localeCompare(y.nome));
+  return { linhas, medianaGeral: mediana([...minutos.values()].flat()) };
+}

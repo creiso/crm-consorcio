@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { brl } from "@/lib/supabase";
-import { nomeMes, brlCompacto, TZ, type LinhaRanking, type LinhaEquipe, type Equipe, type VendaPainel } from "@/lib/painel";
+import { nomeMes, brlCompacto, TZ, type LinhaRanking, type LinhaEquipe, type Equipe, type VendaPainel, type TemposAtendimento } from "@/lib/painel";
 import PagamentoTag from "./PagamentoTag";
 import Avatar from "./Avatar";
 import VendasPorDia, { type Dia } from "./VendasPorDia";
@@ -16,6 +16,7 @@ export type DashProps = {
   placarEquipes: LinhaEquipe[];
   etapas: { id: string; label: string; qtd: number }[]; leadsMes: number;
   vendas: VendaPainel[];
+  tempos: TemposAtendimento | null; // null = SQL 008 ainda não rodou
   // escopo: equipe filtrada (admin) ou a equipe do coordenador; listaEquipes só vem para quem pode filtrar
   equipeAtual: Equipe | null;
   listaEquipes: Equipe[] | null;
@@ -25,6 +26,14 @@ const ICONE: Record<string, string> = { imovel: "🏠", automovel: "🚗", servi
 const MEDALHA = ["🥇", "🥈", "🥉"];
 const pct = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 const cotasTxt = (n: number) => `${n} ${n === 1 ? "cota" : "cotas"}`;
+
+// Horas de expediente: 7 → "7 min", 135 → "2 h 15 min", 1700 → "28 h" (sem dias, que confundiriam com dias corridos)
+function duracao(min: number) {
+  if (min < 1) return "< 1 min";
+  const t = Math.round(min), h = Math.floor(t / 60), m = t % 60;
+  if (h === 0) return `${m} min`;
+  return h < 10 && m ? `${h} h ${m} min` : `${h} h`;
+}
 
 // Valor completo no computador; compacto (R$ 450 mil) no celular, onde o card é estreito.
 const Dinheiro = ({ v }: { v: number }) => (
@@ -51,10 +60,11 @@ export default function DashboardView(d: DashProps) {
   const mesNome = nomeMes(d.mes).split(" de ")[0].toLowerCase(); // "outubro"
   const liderEquipes = d.placarEquipes[0]?.total || 1;
   const comEquipes = d.placarEquipes.length > 0;
+  const maxTempo = Math.max(1, ...(d.tempos?.linhas ?? []).map((l) => l.mediana ?? 0));
   const placarHref = d.equipeAtual && d.listaEquipes ? `/placar?equipe=${d.equipeAtual.id}` : "/placar";
 
   const cardVendas = (
-    <div className={`card ${comEquipes ? "span3" : "span2"}`}>
+    <div className="card span3">
       <div className="card-tit">
         <h3>Vendas do mês</h3>
         <span>{d.vendas.length} registradas</span>
@@ -172,7 +182,7 @@ export default function DashboardView(d: DashProps) {
         </div>
       </div>
 
-      <div className={`dash-grid ${comEquipes ? "dois" : ""}`}>
+      <div className="dash-grid">
         {comEquipes && (
           <div className="card">
             <div className="card-tit">
@@ -208,10 +218,40 @@ export default function DashboardView(d: DashProps) {
           ))}
         </div>
 
-        {!comEquipes && cardVendas}
+        <div className={`card ${comEquipes ? "" : "span2"}`}>
+          <div className="card-tit">
+            <h3>Tempo até o 1º atendimento</h3>
+            <span>{d.tempos?.medianaGeral != null ? `mediana geral ${duracao(d.tempos.medianaGeral)}` : "de Lead para atendimento"}</span>
+          </div>
+          {!d.tempos ? <div className="vazio">Rode o SQL 008_tempo_atendimento.sql no Supabase para começar a medir.</div>
+            : d.tempos.linhas.length === 0 ? <div className="vazio">Nenhum consultor {d.equipeAtual ? "nesta equipe" : "cadastrado"} ainda.</div>
+            : d.tempos.linhas.slice(0, 8).map((l, i) => (
+              <div key={l.id} className="rank-linha"
+                title={`${l.nome}: ${l.mediana != null ? duracao(l.mediana) : "sem atendimentos"} (mediana de ${l.qtd} leads)`}>
+                <span className="rank-pos">{l.mediana != null ? `${i + 1}º` : "—"}</span>
+                <Avatar nome={l.nome} foto={l.foto_url} tamanho={36} />
+                <div style={{ minWidth: 0 }}>
+                  <div className="rank-nome">{l.nome}<small>{l.qtd} {l.qtd === 1 ? "atendido" : "atendidos"}</small></div>
+                  <div className="rank-trilho">{l.mediana != null && <div className="rank-barra" style={{ width: `${Math.max(2, (l.mediana / maxTempo) * 100)}%` }} />}</div>
+                  {d.ehMesAtual && l.fila > 0 && (
+                    <div className={`fila ${(l.esperaMaisAntiga ?? 0) > 60 ? "atrasada" : ""}`}>
+                      ⏳ {l.fila} na fila{l.esperaMaisAntiga != null ? ` · mais antigo há ${duracao(l.esperaMaisAntiga)}` : ""}
+                    </div>
+                  )}
+                </div>
+                <span className="rank-valor">{l.mediana != null ? duracao(l.mediana) : "—"}</span>
+              </div>
+            ))}
+          {d.tempos && (
+            <small className="nota">
+              Mediana do tempo entre o lead chegar no consultor e sair da coluna Lead, contando só o horário
+              comercial: seg a sex 8h30–18h30 e sáb 8h–12h (domingo não conta). Mais rápidos primeiro.
+            </small>
+          )}
+        </div>
       </div>
 
-      {comEquipes && <div className="dash-grid">{cardVendas}</div>}
+      <div className="dash-grid">{cardVendas}</div>
     </>
   );
 }
