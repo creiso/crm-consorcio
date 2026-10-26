@@ -30,7 +30,7 @@ export async function GET(req: Request) {
   const colunas = await Promise.all(
     STATUSES.map(async (s) => {
       const limite = Math.min(Math.max(Number(params.get(s.id)) || 50, 1), 1000);
-      const query = supa.from("leads").select("*, vendedores(nome, foto_url), equipes(nome)", { count: "exact" })
+      const query = supa.from("leads").select("*, vendedores!vendedor_id(nome, foto_url), equipes(nome)", { count: "exact" })
         .eq("status", s.id).order("criado_em", { ascending: false }).limit(limite);
       if (p.papel === "vendedor") query.eq("vendedor_id", p.id);
       if (p.papel === "coordenador") query.eq("equipe_id", p.equipe_id ?? "00000000-0000-0000-0000-000000000000");
