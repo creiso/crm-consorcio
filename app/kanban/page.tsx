@@ -153,73 +153,75 @@ export default function Kanban() {
 
   return (
     <>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-        <h1 style={{ margin: 0 }}>Kanban de leads</h1>
-        {papel === "coordenador" && <span className="pill-equipe">{nomeEquipe(minhaEquipe) ?? "sem equipe"}</span>}
-        <input placeholder="Buscar nome, telefone, cidade" value={busca} onChange={(e) => setBusca(e.target.value)} style={{ maxWidth: 320 }} />
-        {papel === "admin" && equipes.length > 0 && (
-          <select value={filtroEquipe} onChange={(e) => filtrarEquipe(e.target.value)} style={{ maxWidth: 220 }} aria-label="Filtrar por equipe">
-            <option value="">Todas as equipes</option>
-            {equipes.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
-            <option value="sem">Sem equipe</option>
-          </select>
-        )}
-        <span className="ao-vivo"><i /> ao vivo</span>
-      </div>
-      <div className="board">
-        {STATUSES.map((s) => {
-          const items = leads.filter((l) => l.status === s.id);
-          const total = Math.max(totais[s.id] ?? 0, items.length);
-          return (
-            <div
-              key={s.id}
-              className={`col ${over === s.id ? "over" : ""}`}
-              onDragOver={(e) => { e.preventDefault(); setOver(s.id); }}
-              onDragLeave={() => setOver(null)}
-              onDrop={(e) => { setOver(null); arrastando.current = false; mover(e.dataTransfer.getData("id"), s.id); }}
-            >
-              <h3>{s.label} <span>{total}</span></h3>
-              {items.map((l) => {
-                const valor = valorConsorcio(l);
-                const rendaLead = valor ? null : renda(l);
-                const origem = plataforma(l);
-                const wa = whatsapp(l.telefone);
-                return (
-                  <div
-                    key={l.id}
-                    className={`lead ${novos.has(l.id) ? "novo" : ""} ${!l.vendedor_id ? "sem-dono" : ""}`}
-                    draggable
-                    onDragStart={(e) => { arrastando.current = true; e.dataTransfer.setData("id", l.id); }}
-                    onDragEnd={() => { arrastando.current = false; }}
-                    onClick={() => setAberto(l.id)}
-                  >
-                    <div className="lead-top">
-                      <strong>{l.nome}</strong>
-                      {novos.has(l.id) && <span className="badge-novo">novo</span>}
+      <div className="kanban-tela">
+        <div className="kanban-topo">
+          <h1 style={{ margin: 0 }}>Kanban de leads</h1>
+          {papel === "coordenador" && <span className="pill-equipe">{nomeEquipe(minhaEquipe) ?? "sem equipe"}</span>}
+          <input placeholder="Buscar nome, telefone, cidade" value={busca} onChange={(e) => setBusca(e.target.value)} style={{ maxWidth: 320 }} />
+          {papel === "admin" && equipes.length > 0 && (
+            <select value={filtroEquipe} onChange={(e) => filtrarEquipe(e.target.value)} style={{ maxWidth: 220 }} aria-label="Filtrar por equipe">
+              <option value="">Todas as equipes</option>
+              {equipes.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
+              <option value="sem">Sem equipe</option>
+            </select>
+          )}
+          <span className="ao-vivo"><i /> ao vivo</span>
+        </div>
+        <div className="board">
+          {STATUSES.map((s) => {
+            const items = leads.filter((l) => l.status === s.id);
+            const total = Math.max(totais[s.id] ?? 0, items.length);
+            return (
+              <div
+                key={s.id}
+                className={`col ${over === s.id ? "over" : ""}`}
+                onDragOver={(e) => { e.preventDefault(); setOver(s.id); }}
+                onDragLeave={() => setOver(null)}
+                onDrop={(e) => { setOver(null); arrastando.current = false; mover(e.dataTransfer.getData("id"), s.id); }}
+              >
+                <h3>{s.label} <span>{total}</span></h3>
+                {items.map((l) => {
+                  const valor = valorConsorcio(l);
+                  const rendaLead = valor ? null : renda(l);
+                  const origem = plataforma(l);
+                  const wa = whatsapp(l.telefone);
+                  return (
+                    <div
+                      key={l.id}
+                      className={`lead ${novos.has(l.id) ? "novo" : ""} ${!l.vendedor_id ? "sem-dono" : ""}`}
+                      draggable
+                      onDragStart={(e) => { arrastando.current = true; e.dataTransfer.setData("id", l.id); }}
+                      onDragEnd={() => { arrastando.current = false; }}
+                      onClick={() => setAberto(l.id)}
+                    >
+                      <div className="lead-top">
+                        <strong>{l.nome}</strong>
+                        {novos.has(l.id) && <span className="badge-novo">novo</span>}
+                      </div>
+                      {valor && <div className="lead-valor">{valor}</div>}
+                      {rendaLead && <div className="lead-valor"><span className="lead-rotulo">Renda</span> {rendaLead}</div>}
+                      {l.cidade && <small>📍 {l.cidade}</small>}
+                      <div className="lead-rodape">
+                        <small>{fmtData(criadoEm(l))}{origem ? ` · ${origem}` : ""}</small>
+                        <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          {wa && <a href={wa} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title="WhatsApp" className="ico-wa">💬</a>}
+                          {l.vendedores
+                            ? <Avatar nome={l.vendedores.nome} foto={l.vendedores.foto_url} />
+                            : <span className="avatar vazio" title="Sem consultor">!</span>}
+                        </span>
+                      </div>
                     </div>
-                    {valor && <div className="lead-valor">{valor}</div>}
-                    {rendaLead && <div className="lead-valor"><span className="lead-rotulo">Renda</span> {rendaLead}</div>}
-                    {l.cidade && <small>📍 {l.cidade}</small>}
-                    <div className="lead-rodape">
-                      <small>{fmtData(criadoEm(l))}{origem ? ` · ${origem}` : ""}</small>
-                      <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        {wa && <a href={wa} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title="WhatsApp" className="ico-wa">💬</a>}
-                        {l.vendedores
-                          ? <Avatar nome={l.vendedores.nome} foto={l.vendedores.foto_url} />
-                          : <span className="avatar vazio" title="Sem consultor">!</span>}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-              {total > items.length && (
-                <button className="btn secondary mais" disabled={carregando === s.id} onClick={() => carregarMais(s.id)}>
-                  {carregando === s.id ? "Carregando…" : `Carregar mais (${total - items.length} restantes)`}
-                </button>
-              )}
-            </div>
-          );
-        })}
+                  );
+                })}
+                {total > items.length && (
+                  <button className="btn secondary mais" disabled={carregando === s.id} onClick={() => carregarMais(s.id)}>
+                    {carregando === s.id ? "Carregando…" : `Carregar mais (${total - items.length} restantes)`}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {leadAberto && (
