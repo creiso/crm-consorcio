@@ -11,8 +11,10 @@ type Lead = {
   criado_em: string | null; created_at: string; updated_at: string;
   vendedor_id: string | null; vendedores: { nome: string; foto_url: string | null } | null;
   equipe_id: string | null; equipes: { nome: string } | null;
+  reuniao_em?: string | null; reuniao_status?: "agendada" | "feita" | "nao_compareceu" | null; reuniao_remarcacoes?: number | null;
   dados_extras: Record<string, unknown> | null;
 };
+type CorpoReuniao = { status?: "reuniao"; reuniao: { acao: "agendar" | "feita" | "nao_compareceu"; em?: string } };
 type Vendedor = { id: string; nome: string; papel?: string; equipe_id?: string | null };
 type Equipe = { id: string; nome: string };
 
@@ -49,6 +51,48 @@ const fmtData = (d: Date, completo = false) =>
     ...(completo ? { year: "numeric" } : {}), hour: "2-digit", minute: "2-digit",
   });
 
+// "qui., 30 out. · 14:00" no horário de Brasília
+const fmtReuniao = (iso: string) => {
+  const d = new Date(iso);
+  const dia = d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "short", day: "2-digit", month: "short" });
+  return `${dia} · ${d.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })}`;
+};
+function falta(iso: string) {
+  const min = Math.round((new Date(iso).getTime() - Date.now()) / 60000);
+  if (min < 60) return `em ${Math.max(min, 1)} min`;
+  if (min < 24 * 60) return `em ${Math.round(min / 60)} h`;
+  return `em ${Math.round(min / 1440)} dias`;
+}
+const reuniaoPassou = (l: Lead) => !!l.reuniao_em && new Date(l.reuniao_em).getTime() <= Date.now();
+
+// Selo da reunião no card e no painel. Depois do horário liberam "feita" e "não apareceu".
+function SeloReuniao({ lead, onFeita, onNaoVeio, onRemarcar }: {
+  lead: Lead; onFeita: () => void; onNaoVeio: () => void; onRemarcar: () => void;
+}) {
+  if (!lead.reuniao_em || !lead.reuniao_status) return null;
+  const parar = (f: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); f(); };
+  if (lead.reuniao_status === "feita")
+    return <div className="reuniao feita">✓ Reunião feita · {fmtReuniao(lead.reuniao_em)}</div>;
+  if (lead.reuniao_status === "nao_compareceu")
+    return (
+      <>
+        <div className="reuniao faltou">✕ Não compareceu · {fmtReuniao(lead.reuniao_em)}</div>
+        <div className="reuniao-acoes"><button onClick={parar(onRemarcar)}>📅 Remarcar</button></div>
+      </>
+    );
+  if (!reuniaoPassou(lead))
+    return <div className="reuniao agendada">📅 {fmtReuniao(lead.reuniao_em)} <em>{falta(lead.reuniao_em)}</em></div>;
+  return (
+    <>
+      <div className="reuniao pendente">⏰ Reunião {fmtReuniao(lead.reuniao_em)} — como foi?</div>
+      <div className="reuniao-acoes">
+        <button className="ok" onClick={parar(onFeita)}>✓ Feita</button>
+        <button className="nao" onClick={parar(onNaoVeio)}>✕ Não apareceu / remarcou</button>
+      </div>
+    </>
+  );
+}
+
 function whatsapp(tel: string | null) {
   const d = (tel ?? "").replace(/\D/g, "");
   if (d.length < 10) return null;
@@ -61,6 +105,9 @@ export default function Kanban() {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [over, setOver] = useState<string | null>(null);
   const [vendaLead, setVendaLead] = useState<Lead | null>(null);
+  const [reuniaoLead, setReuniaoLead] = useState<{ lead: Lead; modo: "agendar" | "nao_compareceu" } | null>(null);
+  const [aviso, setAviso] = useState("");
+  const [faltaSqlReuniao, setFaltaSqlReuniao] = useState(false);
   const [aberto, setAberto] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
   const [papel, setPapel] = useState<string>("vendedor");
@@ -98,6 +145,7 @@ export default function Kanban() {
     if (topo && (!maisRecente.current || topo > maisRecente.current)) maisRecente.current = topo;
     setLeads(lista);
     setTotais(r.totais ?? {});
+    setFaltaSqlReuniao((r.colunasComErro ?? []).includes("reuniao"));
     setVendedores(r.vendedores ?? []);
     setEquipes(r.equipes ?? []);
     setPapel(r.perfil?.papel ?? "vendedor");
@@ -138,7 +186,20 @@ export default function Kanban() {
     const lead = leads.find((l) => l.id === id);
     if (!lead || lead.status === status) return;
     if (status === "venda") return setVendaLead(lead);
+    if (status === "reuniao") return setReuniaoLead({ lead, modo: "agendar" }); // pede data e horário
     patch(id, { status });
+  }
+
+  // agendar / feita / não apareceu: devolve a mensagem de erro (ou null se deu certo)
+  async function enviarReuniao(lead: Lead, corpo: CorpoReuniao) {
+    const r = await fetch("/api/leads", { method: "PATCH", body: JSON.stringify({ id: lead.id, ...corpo }) });
+    if (!r.ok) return ((await r.json().catch(() => ({}))) as { error?: string }).error ?? "não foi possível salvar";
+    load();
+    return null;
+  }
+  async function reuniaoFeita(lead: Lead) {
+    const erro = await enviarReuniao(lead, { reuniao: { acao: "feita" } });
+    if (erro) { setAviso(erro); setTimeout(() => setAviso(""), 5000); }
   }
 
   function filtrarEquipe(v: string) {
@@ -166,6 +227,9 @@ export default function Kanban() {
             </select>
           )}
           <span className="ao-vivo"><i /> ao vivo</span>
+          {faltaSqlReuniao && papel === "admin" && (
+            <span className="pill-aviso">⚠ Rode o SQL 009_reuniao.sql no Supabase para ativar a coluna Reunião agendada</span>
+          )}
         </div>
         <div className="board">
           {STATUSES.map((s) => {
@@ -201,6 +265,11 @@ export default function Kanban() {
                       {valor && <div className="lead-valor">{valor}</div>}
                       {rendaLead && <div className="lead-valor"><span className="lead-rotulo">Renda</span> {rendaLead}</div>}
                       {l.cidade && <small>📍 {l.cidade}</small>}
+                      {l.status === "reuniao" && (
+                        <SeloReuniao lead={l} onFeita={() => reuniaoFeita(l)}
+                          onNaoVeio={() => setReuniaoLead({ lead: l, modo: "nao_compareceu" })}
+                          onRemarcar={() => setReuniaoLead({ lead: l, modo: "agendar" })} />
+                      )}
                       <div className="lead-rodape">
                         <small>{fmtData(criadoEm(l))}{origem ? ` · ${origem}` : ""}</small>
                         <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -230,8 +299,19 @@ export default function Kanban() {
           onClose={() => setAberto(null)}
           onStatus={(status) => mover(leadAberto.id, status)}
           onVendedor={(vendedor_id) => patch(leadAberto.id, { vendedor_id: vendedor_id || null })}
+          onReuniao={(modo) => setReuniaoLead({ lead: leadAberto, modo })}
+          onReuniaoFeita={() => reuniaoFeita(leadAberto)}
         />
       )}
+      {reuniaoLead && (
+        <ReuniaoModal {...reuniaoLead} onClose={() => setReuniaoLead(null)}
+          enviar={async (corpo) => {
+            const erro = await enviarReuniao(reuniaoLead.lead, corpo);
+            if (!erro) setReuniaoLead(null);
+            return erro;
+          }} />
+      )}
+      {aviso && <div className="aviso-flutuante" role="status">{aviso}</div>}
       {vendaLead && (
         <VendaModal lead={vendaLead} vendedores={vendedores} onClose={() => setVendaLead(null)} onSaved={() => { setVendaLead(null); load(); }} />
       )}
@@ -241,9 +321,10 @@ export default function Kanban() {
 
 // Painel lateral com os dados do lead.
 // Admin e coordenador (líderes) trocam o vendedor; o coordenador só recebe a lista da equipe dele.
-function Detalhe({ lead, lider, mostrarEquipe, vendedores, nomeEquipe, onClose, onStatus, onVendedor }: {
+function Detalhe({ lead, lider, mostrarEquipe, vendedores, nomeEquipe, onClose, onStatus, onVendedor, onReuniao, onReuniaoFeita }: {
   lead: Lead; lider: boolean; mostrarEquipe: boolean; vendedores: Vendedor[]; nomeEquipe: (id?: string | null) => string | undefined;
   onClose: () => void; onStatus: (s: LeadStatus) => void; onVendedor: (id: string) => void;
+  onReuniao: (modo: "agendar" | "nao_compareceu") => void; onReuniaoFeita: () => void;
 }) {
   const wa = whatsapp(lead.telefone);
   // o que já aparece nas seções acima não se repete em "outros dados"
@@ -284,6 +365,17 @@ function Detalhe({ lead, lider, mostrarEquipe, vendedores, nomeEquipe, onClose, 
           {lead.interesse && linha("Interesse", lead.interesse)}
           {lead.observacoes && linha("Observações", lead.observacoes)}
         </section>
+
+        {lead.reuniao_em && lead.reuniao_status && (
+          <section>
+            <div className="det-label" style={{ marginBottom: 6 }}>Reunião</div>
+            <SeloReuniao lead={lead} onFeita={onReuniaoFeita} onNaoVeio={() => onReuniao("nao_compareceu")} onRemarcar={() => onReuniao("agendar")} />
+            {!!lead.reuniao_remarcacoes && <small style={{ color: "var(--muted)", display: "block", marginTop: 6 }}>Remarcada {lead.reuniao_remarcacoes}×</small>}
+            {lead.reuniao_status === "agendada" && !reuniaoPassou(lead) && (
+              <div className="reuniao-acoes"><button onClick={() => onReuniao("agendar")}>Alterar horário</button></div>
+            )}
+          </section>
+        )}
 
         {temOrigem && (
           <section>
@@ -374,6 +466,65 @@ function VendaModal({ lead, vendedores, onClose, onSaved }: {
           <button className="btn" onClick={salvar}>Salvar venda</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Agendar (ou trocar o horário) e "não apareceu": com nova data remarca, sem data só registra a falta.
+function ReuniaoModal({ lead, modo, onClose, enviar }: {
+  lead: Lead; modo: "agendar" | "nao_compareceu"; onClose: () => void;
+  enviar: (corpo: CorpoReuniao) => Promise<string | null>;
+}) {
+  // valor do campo datetime-local no horário do computador de quem está usando
+  const paraCampo = (iso: string) => { const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+  const pendenteFutura = lead.reuniao_status === "agendada" && !reuniaoPassou(lead);
+  const [quando, setQuando] = useState(modo === "agendar" && pendenteFutura && lead.reuniao_em ? paraCampo(lead.reuniao_em) : "");
+  const [remarcar, setRemarcar] = useState(true);
+  const [erro, setErro] = useState("");
+  const [busy, setBusy] = useState(false);
+  const precisaData = modo === "agendar" || remarcar;
+
+  async function salvar(e: React.FormEvent) {
+    e.preventDefault();
+    if (precisaData && !quando) return setErro("Escolha a data e o horário");
+    setBusy(true);
+    const em = precisaData ? new Date(quando).toISOString() : undefined;
+    const msg = await enviar(modo === "agendar"
+      ? { status: "reuniao", reuniao: { acao: "agendar", em } }
+      : { reuniao: { acao: "nao_compareceu", em } });
+    setBusy(false);
+    if (msg) setErro(msg);
+  }
+
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={salvar}>
+        <h3 style={{ margin: 0 }}>
+          {modo === "agendar" ? (pendenteFutura ? "Alterar horário da reunião" : "Agendar reunião") : "Cliente não apareceu"} — {lead.nome}
+        </h3>
+        {modo === "nao_compareceu" && (
+          <div className="seg" style={{ width: "fit-content" }}>
+            <button type="button" className={remarcar ? "on" : ""} onClick={() => setRemarcar(true)}>📅 Remarcou</button>
+            <button type="button" className={!remarcar ? "on" : ""} onClick={() => setRemarcar(false)}>Sem nova data</button>
+          </div>
+        )}
+        {precisaData && (
+          <label style={{ display: "grid", gap: 6 }}>
+            <span className="det-label">{modo === "agendar" ? "Data e horário da reunião" : "Nova data e horário"}</span>
+            <input type="datetime-local" value={quando} onChange={(e) => setQuando(e.target.value)} required autoFocus />
+          </label>
+        )}
+        <small style={{ color: "var(--muted)" }}>
+          {modo === "agendar"
+            ? "Depois desse horário o card libera os botões “Reunião feita” e “Não apareceu / remarcou”."
+            : remarcar ? "A falta fica registrada e a reunião volta para a agenda na nova data." : "A falta fica registrada; dá para remarcar depois pelo card."}
+        </small>
+        {erro && <small style={{ color: "#b4232c" }}>{erro}</small>}
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button type="button" className="btn secondary" onClick={onClose}>Cancelar</button>
+          <button className="btn" disabled={busy}>{busy ? "Salvando…" : "Salvar"}</button>
+        </div>
+      </form>
     </div>
   );
 }

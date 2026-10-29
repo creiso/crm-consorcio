@@ -135,7 +135,7 @@ span.tag { cursor: default; }
    e cada coluna rola para baixo por conta própria (em vez de a página inteira crescer). */
 .kanban-tela { display: flex; flex-direction: column; height: calc(100vh - 115px); height: calc(100dvh - 115px); min-height: 420px; }
 .kanban-topo { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
-.board { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(6, minmax(250px, 1fr)); gap: 12px;
+.board { flex: 1; min-height: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(250px, 1fr); gap: 12px;
   overflow-x: auto; overflow-y: hidden; padding-bottom: 8px; scrollbar-width: auto; scrollbar-color: #9aa3af #e6e8ec; }
 .board::-webkit-scrollbar { height: 14px; }
 .board::-webkit-scrollbar-track { background: #e6e8ec; border-radius: 8px; }
@@ -164,6 +164,23 @@ span.tag { cursor: default; }
 .avatar.vazio { background: #e3262f; }
 .ico-wa { text-decoration: none; font-size: 15px; }
 .btn.mais { width: 100%; font-size: 12px; border-radius: 8px; }
+
+/* reunião agendada: sempre ícone + texto, nunca só cor */
+.reuniao { margin-top: 6px; font-size: 12px; font-weight: 600; padding: 5px 8px; border-radius: 8px; line-height: 1.35; }
+.reuniao em { font-style: normal; font-weight: 500; opacity: .8; margin-left: 4px; }
+.reuniao.agendada { background: #eef4fc; color: #1c5cab; }
+.reuniao.pendente { background: #fff4d6; color: #7a4f00; }
+.reuniao.feita { background: #e5f5e5; color: #006300; }
+.reuniao.faltou { background: #fdecee; color: #b4232c; }
+.reuniao-acoes { display: flex; gap: 6px; margin-top: 6px; }
+.reuniao-acoes button { flex: 1; font: inherit; font-size: 12px; font-weight: 600; padding: 6px 8px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--text); }
+.reuniao-acoes button:hover { background: #f8f9fb; }
+.reuniao-acoes .ok { border-color: #b9e3b9; color: #006300; }
+.reuniao-acoes .nao { border-color: #f5c2c5; color: #b4232c; }
+.pill-aviso { background: #fff4d6; color: #7a4f00; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px; }
+.aviso-flutuante { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #0f172a; color: #fff;
+  padding: 10px 16px; border-radius: 10px; z-index: 30; font-size: 13px; box-shadow: 0 6px 20px rgba(15, 23, 42, .25); }
 @keyframes entra { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 
 .ao-vivo { font-size: 12px; color: #1fa34a; display: flex; align-items: center; gap: 6px; }
@@ -214,7 +231,7 @@ span.tag { cursor: default; }
 @media (max-width: 640px) {
   /* kanban no celular: uma coluna por vez, deslizando para o lado */
   .kanban-tela { height: calc(100vh - 130px); height: calc(100dvh - 130px); }
-  .board { grid-template-columns: repeat(6, 86vw); scroll-snap-type: x mandatory; }
+  .board { grid-auto-columns: 86vw; scroll-snap-type: x mandatory; }
   .col { scroll-snap-align: start; }
   /* menu em duas linhas: marca + foto + Sair em cima, links com rolagem lateral embaixo */
   .nav { position: static; flex-wrap: wrap; padding: 8px 12px 0; row-gap: 4px; }

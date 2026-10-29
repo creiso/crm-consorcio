@@ -14,6 +14,7 @@ export const STATUSES = [
   { id: "atendimento", label: "Em atendimento" },
   { id: "quente", label: "Quente" },
   { id: "frio", label: "Frio" },
+  { id: "reuniao", label: "Reunião agendada" },
   { id: "venda", label: "Venda" },
   { id: "descarte", label: "Descarte" },
 ] as const;
