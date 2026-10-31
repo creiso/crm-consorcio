@@ -287,3 +287,12 @@ span.tag { cursor: default; }
 
 /* Cloudflare Turnstile no login */
 .turnstile { min-height: 65px; display: flex; justify-content: center; }
+
+/* pedidos de "esqueci minha senha" (tela Equipes) e aviso no menu */
+.nav-aviso { margin-left: 6px; background: var(--brand); color: #fff; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 20px; }
+.pedidos-senha { border-color: #f5d48a; background: #fffcf3; }
+.pedido-senha { display: grid; grid-template-columns: 36px minmax(140px, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.pedido-senha small { display: block; color: var(--muted); font-size: 12px; }
+.pedido-acoes { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.pedido-acoes input { width: 190px; }
+@media (max-width: 760px) { .pedido-senha { grid-template-columns: 36px 1fr; } .pedido-acoes { grid-column: 1 / -1; } .pedido-acoes input { flex: 1; } }

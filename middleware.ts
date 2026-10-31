@@ -23,7 +23,8 @@ export async function middleware(req: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession();
   const user = session?.user;
 
-  const publica = pathname === "/login" || pathname === "/setup" || pathname === "/api/setup";
+  // telas abertas sem login: entrar e pedir senha nova ao admin
+  const publica = pathname === "/login" || pathname === "/esqueci-senha" || pathname === "/api/senha";
   if (!user && !publica) {
     if (pathname.startsWith("/api/")) return NextResponse.json({ error: "não autenticado" }, { status: 401 });
     return NextResponse.redirect(new URL("/login", req.url));

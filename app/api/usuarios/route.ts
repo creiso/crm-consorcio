@@ -40,17 +40,26 @@ export async function POST(req: Request) {
   return NextResponse.json({ ok: true });
 }
 
-// Ativar/desativar, entrar/sair da roleta, trocar nível e equipe.
+// Ativar/desativar, entrar/sair da roleta, trocar nível e equipe, e definir uma senha nova.
 export async function PATCH(req: Request) {
   const p = await perfilApi("admin");
   if (p instanceof NextResponse) return p;
-  const { id, ativo, na_roleta, papel, equipe_id } = await req.json();
+  const { id, ativo, na_roleta, papel, equipe_id, senha } = await req.json();
   if (id === p.id && (ativo === false || (papel && papel !== "admin")))
     return NextResponse.json({ error: "Você não pode desativar nem tirar o admin de si mesmo" }, { status: 400 });
 
   const supa = db();
-  const { data: atual } = await supa.from("vendedores").select("papel, equipe_id").eq("id", id).single();
+  const { data: atual } = await supa.from("vendedores").select("papel, equipe_id, user_id").eq("id", id).single();
   if (!atual) return NextResponse.json({ error: "usuário não encontrado" }, { status: 404 });
+
+  // senha nova definida pelo admin (pedido de "esqueci minha senha" ou troca avulsa)
+  if (senha !== undefined) {
+    if (String(senha).length < 8) return NextResponse.json({ error: "A senha precisa ter pelo menos 8 caracteres" }, { status: 400 });
+    if (!atual.user_id) return NextResponse.json({ error: "esse usuário não tem login" }, { status: 400 });
+    const { error } = await supa.auth.admin.updateUserById(atual.user_id, { password: String(senha) });
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    await supa.from("pedidos_senha").update({ resolvido_em: new Date().toISOString() }).eq("vendedor_id", id).is("resolvido_em", null);
+  }
 
   const patch: Record<string, unknown> = {};
   if (typeof ativo === "boolean") patch.ativo = ativo;
@@ -64,8 +73,10 @@ export async function PATCH(req: Request) {
   if (papelFinal === "coordenador" && !equipeFinal)
     return NextResponse.json({ error: "Coordenador precisa ter uma equipe" }, { status: 400 });
 
-  const { error } = await supa.from("vendedores").update(patch).eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (Object.keys(patch).length) {
+    const { error } = await supa.from("vendedores").update(patch).eq("id", id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  }
 
   // trocou de equipe: os leads dele vão junto; vendas antigas sem equipe passam a contar para a nova
   if (patch.equipe_id !== undefined && equipeFinal !== atual.equipe_id) {

@@ -1,18 +1,8 @@
 "use client";
 import { useRef, useState } from "react";
-import Script from "next/script";
+import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
-
-// Cloudflare Turnstile ("não sou um robô"). O token vai junto no login e quem confere é o próprio
-// Supabase (Authentication → Attack Protection → CAPTCHA com Turnstile e a Secret Key).
-// Sem NEXT_PUBLIC_TURNSTILE_SITE_KEY o widget não aparece e o login funciona como antes.
-const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-
-type Turnstile = {
-  render: (el: HTMLElement, opcoes: Record<string, unknown>) => string;
-  reset: (id: string) => void;
-};
-declare global { interface Window { turnstile?: Turnstile } }
+import Turnstile, { SITE_KEY, type TurnstileRef } from "../Turnstile";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -20,24 +10,7 @@ export default function Login() {
   const [erro, setErro] = useState("");
   const [busy, setBusy] = useState(false);
   const [captcha, setCaptcha] = useState<string | null>(null);
-  const caixa = useRef<HTMLDivElement>(null);
-  const widget = useRef<string | null>(null);
-
-  function montarWidget() {
-    if (!SITE_KEY || !window.turnstile || !caixa.current || widget.current) return;
-    widget.current = window.turnstile.render(caixa.current, {
-      sitekey: SITE_KEY, language: "pt-br", theme: "light",
-      callback: (token: string) => setCaptcha(token),
-      "expired-callback": () => setCaptcha(null),
-      "error-callback": () => setCaptcha(null),
-    });
-  }
-
-  // cada token vale uma vez só: depois de uma tentativa, pede um novo
-  function novoDesafio() {
-    if (widget.current && window.turnstile) window.turnstile.reset(widget.current);
-    setCaptcha(null);
-  }
+  const turnstile = useRef<TurnstileRef>(null);
 
   async function entrar(e: React.FormEvent) {
     e.preventDefault();
@@ -50,7 +23,7 @@ export default function Login() {
     });
     setBusy(false);
     if (error) {
-      novoDesafio();
+      turnstile.current?.reset();
       return setErro(/captcha/i.test(error.message) ? "A verificação anti-robô falhou. Tente de novo." : "E-mail ou senha inválidos");
     }
     window.location.href = "/";
@@ -61,15 +34,10 @@ export default function Login() {
       <h1 style={{ margin: 0 }}>Entrar</h1>
       <input type="email" placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} required />
       <input type="password" placeholder="Senha" value={senha} onChange={(e) => setSenha(e.target.value)} required />
-      {SITE_KEY && (
-        <>
-          <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" onReady={montarWidget} />
-          <div ref={caixa} className="turnstile" />
-        </>
-      )}
+      <Turnstile ref={turnstile} onToken={setCaptcha} />
       {erro && <small style={{ color: "#e3262f" }}>{erro}</small>}
       <button className="btn" disabled={busy || (!!SITE_KEY && !captcha)}>{busy ? "Entrando…" : "Entrar"}</button>
-      <small style={{ color: "#666" }}>Primeiro acesso do sistema? <a href="/setup">Criar administrador</a></small>
+      <small style={{ textAlign: "center" }}><Link href="/esqueci-senha">Esqueci minha senha</Link></small>
     </form>
   );
 }
