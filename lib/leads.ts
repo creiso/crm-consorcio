@@ -108,6 +108,9 @@ export function parseData(v: unknown): string | undefined {
   return ano >= 2000 && ano <= 2100 ? d.toISOString() : undefined;
 }
 
+// Leads gerados pela ferramenta de teste de anúncios de cadastro da Meta
+export const ehLeadDeTeste = (nome: string) => /test lead|dummy data/i.test(nome);
+
 export function lerLinha(row: Row, origem: string) {
   const { pick, txt, usados } = leitor(row);
   const nome = txt("nome");
@@ -116,6 +119,8 @@ export function lerLinha(row: Row, origem: string) {
   const id = txt("id");
   const external_key = id ? `${origem}:${id}` : telefone ? `tel:${telefone}` : email ? `mail:${email}` : null;
   if (!nome || !external_key) return null;
+  // lead de teste da Meta ("<test lead: dummy data for nome_completo>"): não entra no CRM
+  if (ehLeadDeTeste(nome)) return null;
 
   const valor_consorcio = textoFormulario(txt("valor_consorcio"));
   const criado_em = parseData(pick("criado_em"));
