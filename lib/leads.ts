@@ -1,5 +1,6 @@
 import { db } from "./supabase";
 import { leadIdMeta } from "./meta";
+import { textoFormulario } from "./texto";
 
 type Row = Record<string, unknown>;
 
@@ -116,7 +117,7 @@ export function lerLinha(row: Row, origem: string) {
   const external_key = id ? `${origem}:${id}` : telefone ? `tel:${telefone}` : email ? `mail:${email}` : null;
   if (!nome || !external_key) return null;
 
-  const valor_consorcio = txt("valor_consorcio");
+  const valor_consorcio = textoFormulario(txt("valor_consorcio"));
   const criado_em = parseData(pick("criado_em"));
   const vendedor = txt("vendedor");
 
@@ -128,10 +129,10 @@ export function lerLinha(row: Row, origem: string) {
     telefone,
     email,
     cidade: txt("cidade"),
-    renda: txt("renda"),
+    renda: textoFormulario(txt("renda")),
     valor_consorcio,
     valor_pretendido: parseValor(valor_consorcio),
-    conhece_consorcio: txt("conhece_consorcio"),
+    conhece_consorcio: textoFormulario(txt("conhece_consorcio")),
     plataforma: txt("plataforma")?.toLowerCase() ?? null,
     campanha: txt("campanha"),
     conjunto: txt("conjunto"),

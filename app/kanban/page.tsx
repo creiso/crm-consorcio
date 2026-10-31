@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { STATUSES, LeadStatus, brl } from "@/lib/supabase";
 import Avatar from "../Avatar";
+import { textoFormulario } from "@/lib/texto";
 
 type Lead = {
   id: string; nome: string; telefone: string | null; email: string | null; cidade: string | null;
@@ -33,9 +34,10 @@ function extra(l: Lead, palavras: string[]) {
   return null;
 }
 
-const renda = (l: Lead) => l.renda ?? extra(l, ["renda", "salario"]);
-const conhece = (l: Lead) => l.conhece_consorcio ?? extra(l, ["conhece", "sabe como funciona"]);
-const valorConsorcio = (l: Lead) => (l.valor_pretendido ? brl(Number(l.valor_pretendido)) : l.valor_consorcio);
+// respostas "em código" da Meta (entre_r$_2.000_a_r$_3.000) aparecem legíveis
+const renda = (l: Lead) => textoFormulario(l.renda ?? extra(l, ["renda", "salario"]));
+const conhece = (l: Lead) => textoFormulario(l.conhece_consorcio ?? extra(l, ["conhece", "sabe como funciona"]));
+const valorConsorcio = (l: Lead) => (l.valor_pretendido ? brl(Number(l.valor_pretendido)) : textoFormulario(l.valor_consorcio));
 const plataforma = (l: Lead) => (l.plataforma ? PLATAFORMA[l.plataforma] ?? l.plataforma : null);
 const simNao = (v: unknown) => (String(v).toLowerCase() === "true" ? "sim" : String(v).toLowerCase() === "false" ? "não" : null);
 
