@@ -12,6 +12,43 @@ type Planilha = Dist & {
 
 const PADRAO: Dist = { modo: "automatica", equipes: [] };
 
+type StatusMeta = {
+  configurado: boolean; modoTeste: boolean; sqlFaltando: boolean;
+  pendentes: number | null; enviados24h: number | null; falharam: number | null; ultimoErro: string | null;
+};
+
+// Situação da API de Conversões da Meta: as mudanças de etapa dos leads vão para a Meta a cada minuto.
+function CardMeta({ s }: { s: StatusMeta | null }) {
+  if (!s) return null;
+  const linha = (rotulo: string, valor: React.ReactNode) => <div className="det-linha"><span>{rotulo}</span><b>{valor}</b></div>;
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-tit">
+        <h3>Integração com a Meta (API de Conversões)</h3>
+        <span>{s.configurado ? (s.modoTeste ? "🧪 modo de teste" : "✓ ativa") : "desativada"}</span>
+      </div>
+      {!s.configurado ? (
+        <p style={{ margin: 0, color: "var(--muted)", fontSize: 13 }}>
+          Falta o token de acesso do conjunto de dados na Vercel (META_CAPI_TOKEN). Enquanto isso, nada é enviado à Meta.
+        </p>
+      ) : s.sqlFaltando ? (
+        <p style={{ margin: 0, color: "#7a4f00", fontSize: 13 }}>⚠ Rode o SQL 010_meta_conversoes.sql no Supabase.</p>
+      ) : (
+        <>
+          {linha("Enviados nas últimas 24 h", s.enviados24h)}
+          {linha("Na fila (vão no próximo minuto)", s.pendentes)}
+          {linha("Falharam 5 vezes", s.falharam)}
+          {s.ultimoErro && linha("Último erro", <span style={{ color: "#b4232c", fontWeight: 500 }}>{s.ultimoErro}</span>)}
+          <small className="nota">
+            Cada mudança de etapa (Lead, Em atendimento, Quente, Frio, Reunião agendada, Reunião realizada, Venda, Descarte)
+            vira um evento no Gerenciador de Eventos. Só vão leads que vieram dos formulários do Facebook/Instagram.
+          </small>
+        </>
+      )}
+    </div>
+  );
+}
+
 // Frase que explica, em português simples, o que vai acontecer com os leads novos.
 function resumo(d: Dist, equipes: Equipe[]) {
   const nomes = d.equipes.map((id) => equipes.find((e) => e.id === id)?.nome ?? "?");
@@ -66,11 +103,16 @@ export default function Planilhas() {
   const [distArquivo, setDistArquivo] = useState<Dist>(PADRAO);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [meta, setMeta] = useState<StatusMeta | null>(null);
 
   async function load() {
-    const [e, p] = await Promise.all([fetch("/api/equipes").then((r) => r.json()), fetch("/api/planilhas").then((r) => r.json())]);
+    const [e, p, m] = await Promise.all([
+      fetch("/api/equipes").then((r) => r.json()), fetch("/api/planilhas").then((r) => r.json()),
+      fetch("/api/meta").then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    ]);
     setEquipes(Array.isArray(e) ? e : []);
     setPlanilhas(Array.isArray(p) ? p : []);
+    setMeta(m);
   }
   useEffect(() => { load(); }, []);
 
@@ -175,6 +217,8 @@ export default function Planilhas() {
           Se a planilha tiver várias abas, abra a aba certa antes de copiar o link. Todas as planilhas ativas sincronizam sozinhas a cada 1 minuto.
         </p>
       </div>
+
+      <CardMeta s={meta} />
 
       <div className="grid2">
         <div className="card" style={{ display: "grid", gap: 12, alignContent: "start" }}>

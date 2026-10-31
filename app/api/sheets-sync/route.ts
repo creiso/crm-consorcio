@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { upsertLeads, type Distribuicao } from "@/lib/leads";
 import { db } from "@/lib/supabase";
 import { perfilApi } from "@/lib/auth";
+import { enviarEventosMeta } from "@/lib/meta";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,9 @@ export async function GET(req: Request) {
   const { data } = await query;
   const resultados = [];
   for (const p of (data ?? []) as Planilha[]) resultados.push(await sincronizar(p));
-  return NextResponse.json({ resultados });
+  // aproveita a passada de cada minuto para mandar à Meta as mudanças de etapa da fila
+  const meta = await enviarEventosMeta().catch((e: Error) => ({ ativo: true, erro: e.message }));
+  return NextResponse.json({ resultados, meta });
 }
 
 // POST ?planilha=<id>: Google Apps Script envia as linhas editadas (tempo real).
