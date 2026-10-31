@@ -12,6 +12,14 @@ function distribuicao(body: { modo?: string; equipes?: unknown }) {
   return { modo, equipes, roleta: modo === "automatica", vendedor_padrao_id: null };
 }
 
+// Conjunto de dados da Meta do formulário desta planilha (só números; vazio = conjunto padrão).
+// Só mexe no campo quando ele vem na requisição.
+function conjuntoMeta(body: { meta_dataset_id?: unknown }) {
+  if (body.meta_dataset_id === undefined) return {};
+  const id = String(body.meta_dataset_id ?? "").replace(/\D/g, "");
+  return { meta_dataset_id: id || null };
+}
+
 export async function GET() {
   const p = await perfilApi("admin");
   if (p instanceof NextResponse) return p;
@@ -26,7 +34,7 @@ export async function POST(req: Request) {
   if (!body.nome || !/^https:\/\/docs\.google\.com\/spreadsheets\//.test(body.csv_url ?? ""))
     return NextResponse.json({ error: "Informe um nome e o link da planilha do Google Sheets" }, { status: 400 });
   const { data, error } = await db().from("planilhas")
-    .insert({ nome: body.nome, csv_url: body.csv_url, ...distribuicao(body) }).select().single();
+    .insert({ nome: body.nome, csv_url: body.csv_url, ...distribuicao(body), ...conjuntoMeta(body) }).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
 }
@@ -35,7 +43,7 @@ export async function PATCH(req: Request) {
   const p = await perfilApi("admin");
   if (p instanceof NextResponse) return p;
   const body = await req.json();
-  const { error } = await db().from("planilhas").update({ ativo: !!body.ativo, ...distribuicao(body) }).eq("id", body.id);
+  const { error } = await db().from("planilhas").update({ ativo: !!body.ativo, ...distribuicao(body), ...conjuntoMeta(body) }).eq("id", body.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

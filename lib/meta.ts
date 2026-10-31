@@ -3,7 +3,9 @@ import { db } from "./supabase";
 
 // API de Conversões da Meta, integração de CRM: cada mudança de etapa do lead vira um evento.
 // O gatilho do banco (SQL 010) põe os eventos na fila eventos_meta; aqui a fila é enviada.
-// Configuração na Vercel: META_CAPI_TOKEN (obrigatório), META_DATASET_ID e META_TEST_EVENT_CODE (opcionais).
+// Cada planilha manda para o conjunto de dados do formulário dela (planilhas.meta_dataset_id, SQL 015).
+// Configuração na Vercel: META_CAPI_TOKEN (obrigatório); META_CAPI_TOKEN_<id do conjunto> quando um conjunto
+// precisa de token próprio; META_DATASET_ID (conjunto padrão) e META_TEST_EVENT_CODE (opcionais).
 
 const VERSAO_API = "v26.0";
 const DATASET_PADRAO = "1818084516284638";
@@ -24,7 +26,7 @@ export const NOME_EVENTO: Record<string, string> = {
 
 export type LeadMeta = {
   id: string; external_key: string; nome: string; email: string | null; telefone: string | null;
-  cidade: string | null; plataforma: string | null;
+  cidade: string | null; plataforma: string | null; origem?: string | null;
 };
 
 const sha256 = (v: string) => createHash("sha256").update(v).digest("hex");
@@ -74,9 +76,12 @@ export const corpoJson = (eventos: object[], teste: string | undefined) =>
   JSON.stringify({ data: eventos, ...(teste ? { test_event_code: teste } : {}) })
     .replace(/"lead_id":"(\d{15,17})"/g, '"lead_id":$1');
 
-async function postar(eventos: object[]) {
-  const url = `https://graph.facebook.com/${VERSAO_API}/${process.env.META_DATASET_ID || DATASET_PADRAO}/events`
-    + `?access_token=${encodeURIComponent(process.env.META_CAPI_TOKEN!)}`;
+// token do conjunto: o próprio (META_CAPI_TOKEN_<id>) ou o geral
+const tokenDo = (dataset: string) => process.env[`META_CAPI_TOKEN_${dataset}`] || process.env.META_CAPI_TOKEN!;
+
+async function postar(dataset: string, eventos: object[]) {
+  const url = `https://graph.facebook.com/${VERSAO_API}/${dataset}/events`
+    + `?access_token=${encodeURIComponent(tokenDo(dataset))}`;
   const r = await fetch(url, {
     method: "POST", headers: { "content-type": "application/json" },
     body: corpoJson(eventos, process.env.META_TEST_EVENT_CODE || undefined),
@@ -94,44 +99,55 @@ export async function enviarEventosMeta() {
   if (!process.env.META_CAPI_TOKEN) return { ativo: false as const };
   const supa = db();
   const { data, error } = await supa.from("eventos_meta")
-    .select("id, evento, ocorrido_em, tentativas, leads(id, external_key, nome, email, telefone, cidade, plataforma)")
+    .select("id, evento, ocorrido_em, tentativas, leads(id, external_key, nome, email, telefone, cidade, plataforma, origem)")
     .is("enviado_em", null).lt("tentativas", MAX_TENTATIVAS).order("ocorrido_em").limit(500);
   if (error) return { ativo: true as const, erro: "rode o SQL 010_meta_conversoes.sql no Supabase" };
 
   const fila = (data ?? []) as unknown as Fila[];
   const agora = Date.now();
+
+  // conjunto de dados de cada planilha (lead de arquivo importado ou planilha sem conjunto → padrão)
+  const padrao = process.env.META_DATASET_ID || DATASET_PADRAO;
+  const { data: planilhas } = await supa.from("planilhas").select("id, meta_dataset_id");
+  const conjuntoDaPlanilha = new Map((planilhas ?? []).map((p) => [`sheets:${p.id}`, p.meta_dataset_id as string | null]));
+  const conjuntoDo = (l: LeadMeta) => (l.origem && conjuntoDaPlanilha.get(l.origem)) || padrao;
   const marcar = (ids: number[], campos: Record<string, unknown>) =>
     ids.length ? supa.from("eventos_meta").update(campos).in("id", ids) : Promise.resolve();
 
-  const ignorar: number[] = [], antigos: number[] = [], prontos: { id: number; tentativas: number; evento: object }[] = [];
+  const ignorar: number[] = [], antigos: number[] = [];
+  const prontos: { id: number; tentativas: number; dataset: string; evento: object }[] = [];
   for (const f of fila) {
     const l = f.leads;
     const daMeta = !!l && (!!leadIdMeta(l.external_key) || ["fb", "ig"].includes(l.plataforma ?? ""));
     if (!l || !daMeta) ignorar.push(f.id);
     else if (agora - new Date(f.ocorrido_em).getTime() > SETE_DIAS_MS) antigos.push(f.id);
-    else prontos.push({ id: f.id, tentativas: f.tentativas, evento: montarEvento(l, f.evento, new Date(f.ocorrido_em)) });
+    else prontos.push({ id: f.id, tentativas: f.tentativas, dataset: conjuntoDo(l), evento: montarEvento(l, f.evento, new Date(f.ocorrido_em)) });
   }
   const agoraIso = new Date().toISOString();
   await marcar(ignorar, { enviado_em: agoraIso, erro: "não veio da Meta (não enviado)" });
   await marcar(antigos, { enviado_em: agoraIso, erro: "mais de 7 dias (a Meta não aceita)" });
 
   let enviados = 0, falhas = 0, ultimoErro: string | null = null;
-  // lotes de 100; se a Meta recusar o lote, tenta um por um para achar o evento com problema
-  for (let i = 0; i < prontos.length; i += 100) {
-    const lote = prontos.slice(i, i + 100);
+  // um envio por conjunto de dados, em lotes de 100; se a Meta recusar o lote, tenta um por um
+  const lotes: { dataset: string; itens: typeof prontos }[] = [];
+  for (const dataset of new Set(prontos.map((p) => p.dataset))) {
+    const doConjunto = prontos.filter((p) => p.dataset === dataset);
+    for (let i = 0; i < doConjunto.length; i += 100) lotes.push({ dataset, itens: doConjunto.slice(i, i + 100) });
+  }
+  for (const { dataset, itens: lote } of lotes) {
     try {
-      await postar(lote.map((p) => p.evento));
+      await postar(dataset, lote.map((p) => p.evento));
       await marcar(lote.map((p) => p.id), { enviado_em: new Date().toISOString(), erro: null });
       enviados += lote.length;
     } catch {
       for (const p of lote) {
         try {
-          await postar([p.evento]);
+          await postar(dataset, [p.evento]);
           await marcar([p.id], { enviado_em: new Date().toISOString(), erro: null });
           enviados++;
         } catch (e) {
           falhas++;
-          ultimoErro = (e as Error).message;
+          ultimoErro = `conjunto ${dataset}: ${(e as Error).message}`;
           await marcar([p.id], { tentativas: p.tentativas + 1, erro: ultimoErro });
         }
       }

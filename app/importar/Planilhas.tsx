@@ -6,7 +6,7 @@ import * as XLSX from "xlsx";
 type Equipe = { id: string; nome: string };
 type Dist = { modo: "automatica" | "manual"; equipes: string[] };
 type Planilha = Dist & {
-  id: string; nome: string; csv_url: string; ativo: boolean;
+  id: string; nome: string; csv_url: string; ativo: boolean; meta_dataset_id?: string | null;
   ultima_sync: string | null; ultimo_resultado: string | null;
 };
 
@@ -183,6 +183,7 @@ export default function Planilhas() {
                 <td style={{ padding: 6 }}>
                   <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 4 }}>{chipsEquipes(p)}</div>
                   <small style={{ color: "var(--muted)" }}>{p.modo === "manual" ? "✋ Manual" : "🎰 Automática (roleta)"}</small>{" "}
+                  {p.meta_dataset_id && <small style={{ color: "var(--muted)" }}>· Meta {p.meta_dataset_id}</small>}{" "}
                   <button className="link-btn" onClick={() => setEditando(p)}>editar</button>
                 </td>
                 <td style={{ padding: 6 }}>
@@ -247,6 +248,12 @@ export default function Planilhas() {
           <div className="modal" style={{ width: 460 }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: 0 }}>Distribuição — {editando.nome}</h3>
             <DistribuicaoEditor valor={editando} equipes={equipes} onChange={(d) => setEditando({ ...editando, ...d })} />
+            <label style={{ display: "grid", gap: 6 }}>
+              <span className="det-label">Conjunto de dados da Meta deste formulário</span>
+              <input inputMode="numeric" placeholder="ex.: 1818084516284638 (vazio = o padrão)" value={editando.meta_dataset_id ?? ""}
+                onChange={(e) => setEditando({ ...editando, meta_dataset_id: e.target.value })} />
+              <small style={{ color: "var(--muted)" }}>Está em Gerenciador de Eventos → integração de CRM, ao lado do formulário.</small>
+            </label>
             <small style={{ color: "var(--muted)" }}>Vale para os leads novos e para os que ainda estão sem consultor. Quem já tem dono não muda.</small>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button className="btn secondary" onClick={() => setEditando(null)}>Cancelar</button>
