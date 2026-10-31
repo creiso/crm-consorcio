@@ -284,3 +284,6 @@ span.tag { cursor: default; }
   .tag .longo { display: none; }
   .tag .curto { display: inline; }
 }
+
+/* Cloudflare Turnstile no login */
+.turnstile { min-height: 65px; display: flex; justify-content: center; }
