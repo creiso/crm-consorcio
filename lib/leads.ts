@@ -1,4 +1,5 @@
 import { db } from "./supabase";
+import { leadIdMeta } from "./meta";
 
 type Row = Record<string, unknown>;
 
@@ -179,6 +180,69 @@ async function rodarRoleta(leadIds: string[], equipes: string[]) {
   }
 }
 
+// Variações do mesmo celular: com e sem o 55 do Brasil
+function variacoesTelefone(tel: string) {
+  const v = new Set([tel]);
+  if (tel.startsWith("55") && tel.length >= 12) v.add(tel.slice(2));
+  if (tel.length === 10 || tel.length === 11) v.add("55" + tel);
+  return [...v];
+}
+
+type Chaveavel = { external_key: string; telefone: string | null; email: string | null };
+
+// Evita lead duplicado. Um lead que ainda não existe pela chave, mas já existe com o mesmo id da Meta,
+// telefone ou e-mail, atualiza o que já existe em vez de criar outro. Cobre: o mesmo lead em duas
+// planilhas, planilha removida e cadastrada de novo, arquivo importado + planilha, e a pessoa que
+// preencheu o formulário de novo (vale o lead que já estava sendo atendido).
+export async function juntarComExistentes<T extends Chaveavel>(leads: T[]): Promise<T[]> {
+  const supa = db();
+  const lotes = <X,>(lista: X[], n: number) => Array.from({ length: Math.ceil(lista.length / n) }, (_, i) => lista.slice(i * n, i * n + n));
+
+  const jaExistem = new Set<string>();
+  for (const lote of lotes(leads.map((l) => l.external_key), 200)) {
+    const { data } = await supa.from("leads").select("external_key").in("external_key", lote);
+    for (const d of data ?? []) jaExistem.add(d.external_key);
+  }
+  const novos = leads.filter((l) => !jaExistem.has(l.external_key));
+  if (!novos.length) return leads;
+
+  // leads que já estão no banco com o mesmo id da Meta, telefone ou e-mail (o mais antigo vence)
+  type Existente = { external_key: string; telefone: string | null; email: string | null; created_at: string };
+  const achados: Existente[] = [];
+  const buscar = async (filtro: (q: ReturnType<typeof base>) => ReturnType<typeof base>) => {
+    const { data } = await filtro(base());
+    achados.push(...((data ?? []) as Existente[]));
+  };
+  const base = () => supa.from("leads").select("external_key, telefone, email, created_at");
+  const idsMeta = [...new Set(novos.map((l) => leadIdMeta(l.external_key)).filter((x): x is string => !!x))];
+  const telefones = [...new Set(novos.flatMap((l) => (l.telefone ? variacoesTelefone(l.telefone) : [])))];
+  const emails = [...new Set(novos.map((l) => l.email).filter((x): x is string => !!x))];
+  for (const lote of lotes(idsMeta, 30)) await buscar((q) => q.or(lote.map((id) => `external_key.like.*l:${id}`).join(",")));
+  for (const lote of lotes(telefones, 200)) await buscar((q) => q.in("telefone", lote));
+  for (const lote of lotes(emails, 200)) await buscar((q) => q.in("email", lote));
+  achados.sort((a, b) => a.created_at.localeCompare(b.created_at));
+
+  const porMeta = new Map<string, string>(), porTel = new Map<string, string>(), porEmail = new Map<string, string>();
+  for (const e of achados) {
+    const id = leadIdMeta(e.external_key);
+    if (id && !porMeta.has(id)) porMeta.set(id, e.external_key);
+    for (const t of e.telefone ? variacoesTelefone(e.telefone) : []) if (!porTel.has(t)) porTel.set(t, e.external_key);
+    if (e.email && !porEmail.has(e.email)) porEmail.set(e.email, e.external_key);
+  }
+
+  // dentro do próprio lote também: dois envios da mesma pessoa viram um lead só
+  for (const l of novos) {
+    const id = leadIdMeta(l.external_key);
+    const tels = l.telefone ? variacoesTelefone(l.telefone) : [];
+    const chave = (id && porMeta.get(id)) || tels.map((t) => porTel.get(t)).find(Boolean) || (l.email && porEmail.get(l.email));
+    if (chave) l.external_key = chave;
+    if (id && !porMeta.has(id)) porMeta.set(id, l.external_key);
+    for (const t of tels) if (!porTel.has(t)) porTel.set(t, l.external_key);
+    if (l.email && !porEmail.has(l.email)) porEmail.set(l.email, l.external_key);
+  }
+  return leads;
+}
+
 export async function upsertLeads(rows: Row[], origem: string, distribuicao: Distribuicao) {
   const supa = db();
   const { data: vendedores } = await supa.from("vendedores").select("id, nome, email, equipe_id");
@@ -197,7 +261,8 @@ export async function upsertLeads(rows: Row[], origem: string, distribuicao: Dis
       return v ? { ...linha.lead, vendedor_id: v.id, equipe_id: v.equipe_id } : linha.lead;
     })
     .filter((l): l is NonNullable<typeof l> => !!l);
-  // dedup dentro do próprio lote (última linha vence)
+  // junta com o que já existe (mesmo id da Meta, telefone ou e-mail) e tira repetidos do lote (última linha vence)
+  await juntarComExistentes(leads);
   const unique = [...new Map(leads.map((l) => [l.external_key, l])).values()];
   if (!unique.length) return { recebidos: rows.length, gravados: 0, ignorados: rows.length };
 
