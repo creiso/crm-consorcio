@@ -1,4 +1,4 @@
--- Rode DEPOIS do 015 (SQL Editor > New query > cole > Run)
+-- Rode no Supabase (SQL Editor > New query > cole > Run). Não depende dos arquivos anteriores estarem pendentes ou não.
 -- WhatsApp pela API própria (conector no PC do escritório): situação da conexão e mensagens.
 
 -- uma linha só: situação atual do conector
