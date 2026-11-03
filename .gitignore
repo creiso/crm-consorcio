@@ -10,3 +10,8 @@ next-env.d.ts
 
 .vercel
 *.tsbuildinfo
+# sessão do WhatsApp: quem tiver esses arquivos controla o número
+whatsapp-conector/sessao/
+# mensagens esperando o CRM confirmar e registro do conector
+whatsapp-conector/fila.json*
+whatsapp-conector/*.log

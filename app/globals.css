@@ -298,3 +298,17 @@ span.tag { cursor: default; }
 .pedido-acoes { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .pedido-acoes input { width: 190px; }
 @media (max-width: 760px) { .pedido-senha { grid-template-columns: 36px 1fr; } .pedido-acoes { grid-column: 1 / -1; } .pedido-acoes input { flex: 1; } }
+
+/* tela WhatsApp: situação sempre com ícone + texto */
+.wa-estado { font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: 8px; }
+.wa-estado.ok { background: #e5f5e5; color: #006300; }
+.wa-estado.aviso { background: #fff4d6; color: #7a4f00; }
+.wa-estado.off { background: #fdecee; color: #b4232c; }
+.wa-qr { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; }
+.wa-passos { margin: 0; padding-left: 18px; font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
+.wa-lista { display: grid; gap: 8px; max-height: 420px; overflow-y: auto; }
+.wa-msg { padding: 8px 10px; border-radius: 10px; font-size: 13px; overflow-wrap: anywhere; display: grid; gap: 3px; }
+.wa-msg small { color: var(--muted); font-size: 11px; }
+.wa-msg.recebida { background: #f1f3f6; margin-right: 24px; }
+.wa-msg.enviada { background: #eef4fc; margin-left: 24px; }
+.wa-msg .wa-erro { color: #b4232c; }

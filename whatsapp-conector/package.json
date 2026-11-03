@@ -1,0 +1,12 @@
+{
+  "name": "whatsapp-conector",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "baileys": "7.0.0-rc14",
+    "pino": "10.4.0"
+  }
+}

@@ -37,6 +37,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 </Link>
               )}
               {admin && <Link href="/usuarios">Usuários</Link>}
+              {admin && <Link href="/whatsapp">WhatsApp</Link>}
             </div>
             <Link href="/perfil" className="eu" title="Meu perfil">
               <span className="eu-nome">
