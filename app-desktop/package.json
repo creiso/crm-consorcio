@@ -1,0 +1,58 @@
+{
+  "name": "crm-consorcio-app",
+  "productName": "CRM Consórcio",
+  "version": "1.0.0",
+  "description": "App do CRM Consórcio para Windows",
+  "author": "CRM Consórcio",
+  "private": true,
+  "type": "module",
+  "main": "main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "instalador": "electron-builder --win nsis --config.directories.output=%LOCALAPPDATA%/crm-consorcio-app-build"
+  },
+  "build": {
+    "appId": "br.com.crmconsorcio.app",
+    "artifactName": "CRM-Consorcio-Setup-${version}.${ext}",
+    "npmRebuild": false,
+    "directories": {
+      "output": "dist",
+      "buildResources": "recursos"
+    },
+    "files": [
+      "main.mjs",
+      "regras.mjs",
+      "offline.html",
+      "recursos/icone.png"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "recursos/icone.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true,
+      "installerLanguages": [
+        "pt_BR"
+      ],
+      "language": "1046",
+      "installerIcon": "recursos/icone.ico",
+      "uninstallerIcon": "recursos/icone.ico",
+      "uninstallDisplayName": "CRM Consórcio"
+    },
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "onlyLoadAppFromAsar": true
+    }
+  },
+  "devDependencies": {
+    "electron": "45.2.1",
+    "electron-builder": "26.18.0"
+  }
+}
