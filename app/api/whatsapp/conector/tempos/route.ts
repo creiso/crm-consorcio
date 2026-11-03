@@ -12,12 +12,14 @@ export async function POST(req: Request) {
   if (!conectorAutorizado(req)) return NextResponse.json({ error: "não autorizado" }, { status: 401 });
   const supa = db();
   const desde = new Date(Date.now() - 14 * 86_400_000).toISOString();
-  const [mensagens, config, novos, contatos] = await Promise.all([
+  const [mensagens, config, novos, contatos, testes] = await Promise.all([
     supa.from("whatsapp_mensagens").select("telefone, direcao, origem, criada_em, registrada_em, enviando_em, enviada_em")
       .order("registrada_em", { ascending: false }).order("criada_em", { ascending: false }).limit(100),
     supa.from("whatsapp_ia").select("*").eq("id", 1).maybeSingle(),
     supa.from("leads").select("created_at, origem").gte("created_at", desde).limit(10000),
     supa.from("leads").select("created_at, whatsapp_contato, whatsapp_contato_em").not("whatsapp_contato", "is", null).order("whatsapp_contato_em", { ascending: false }).limit(20),
+    // só o botão de teste da primeira mensagem grava quem mandou numa mensagem da IA
+    supa.from("whatsapp_mensagens").select("criada_em, status").eq("origem", "ia").not("criada_por", "is", null).order("criada_em", { ascending: false }).limit(5),
   ]);
   // quantos leads novos chegam por dia e por hora (Brasília), para calibrar a primeira mensagem
   const porDia: Record<string, number> = {};
@@ -49,6 +51,7 @@ export async function POST(req: Request) {
     primeiroContato: c && {
       ligado: c.primeiro_contato, desde: c.primeiro_contato_desde, limite: c.primeiro_contato_limite, temTexto: !!c.primeira_mensagem,
       sqlRodado: "primeira_mensagem" in c,
+      testesDoBotao: testes.data ?? [],
       ultimos: (contatos.data ?? []).map((l) => ({ situacao: l.whatsapp_contato, lead_ate_mensagem_s: segundos(l.created_at, l.whatsapp_contato_em) })),
     },
     respostas: respostas.slice(-10),

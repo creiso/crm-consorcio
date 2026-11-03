@@ -49,10 +49,12 @@ export async function PUT(req: Request) {
   const supa = db();
   const { data: atual } = await supa.from("whatsapp_ia").select("*").eq("id", 1).maybeSingle();
   const temPrimeira = !!atual && "primeira_mensagem" in atual; // depois do SQL 018
-  const ligar = b.primeiro_contato === true;
+  // aba aberta antes da atualização não manda estes campos: ficam como estão, em vez de serem apagados
+  const veioPrimeira = "primeira_mensagem" in b;
+  const ligar = veioPrimeira ? b.primeiro_contato === true : !!atual?.primeiro_contato;
   if (ligar && !temPrimeira) return NextResponse.json({ error: "Rode o SQL 018_primeira_mensagem.sql no Supabase." }, { status: 400 });
   const primeira = String(b.primeira_mensagem ?? "");
-  const erroPrimeira = ligar ? erroDaPrimeiraMensagem(primeira) : null;
+  const erroPrimeira = ligar && veioPrimeira ? erroDaPrimeiraMensagem(primeira) : null;
   if (erroPrimeira) return NextResponse.json({ error: erroPrimeira }, { status: 400 });
   const limite = Number(b.primeiro_contato_limite ?? 30);
   if (!Number.isInteger(limite) || limite < 1 || limite > 200) return NextResponse.json({ error: "O máximo por dia precisa ser de 1 a 200." }, { status: 400 });
@@ -61,7 +63,7 @@ export async function PUT(req: Request) {
 
   const { error } = await supa.from("whatsapp_ia").update({
     modo: b.modo, numeros_teste: numeros, instrucoes, exemplos,
-    ...(temPrimeira ? { primeiro_contato: ligar, primeira_mensagem: primeira, primeiro_contato_limite: limite } : {}),
+    ...(temPrimeira && veioPrimeira ? { primeiro_contato: ligar, primeira_mensagem: primeira, primeiro_contato_limite: limite } : {}),
     ...(comecaAgora ? { primeiro_contato_desde: new Date().toISOString() } : {}),
   }).eq("id", 1);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
