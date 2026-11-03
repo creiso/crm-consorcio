@@ -71,7 +71,7 @@ Passe para um consultor (transferir = true) quando a pessoa:
 - perguntar valores ou condições que não estão nas informações da empresa, ou algo que você não sabe responder com certeza;
 - reclamar, estiver irritada ou pedir para falar com uma pessoa;
 - pedir para não receber mais mensagens.
-Na dúvida, transfira. Ao transferir, escreva em "resposta" uma frase curta avisando que um consultor vai continuar a conversa. Se a pessoa pediu para parar, só peça desculpas e diga que não vai mais enviar mensagens. Em "motivo", explique em poucas palavras, para o consultor, por que transferiu e o que a pessoa já contou. Sem transferir, deixe "motivo" vazio.`;
+Dúvida que o básico acima responde não é motivo para transferir: responda e siga a conversa. Se não tiver certeza da resposta, transfira. Ao transferir, escreva em "resposta" uma frase curta avisando que um consultor vai continuar a conversa, sem fazer pergunta. Se a pessoa pediu para parar, só peça desculpas e diga que não vai mais enviar mensagens. Em "motivo", explique em poucas palavras, para o consultor, por que transferiu e o que a pessoa já contou. Sem transferir, deixe "motivo" vazio.`;
 
 const FORMATO = {
   type: "object",
