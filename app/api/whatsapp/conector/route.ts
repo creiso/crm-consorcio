@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
-import { atualizarConversas, responderConversas } from "@/lib/ia";
+import { atualizarConversas, iniciarConversas, marcarLead, responderConversas } from "@/lib/ia";
 import { LIMITE_ENVIANDO_MIN, LIMITE_PENDENTE_MIN, conectorAutorizado, leadsDosTelefones } from "@/lib/whatsapp";
 
 export const dynamic = "force-dynamic";
@@ -48,9 +48,11 @@ export async function POST(req: Request) {
   }
 
   for (const r of c.resultados ?? []) {
-    await supa.from("whatsapp_mensagens").update(r.ok
+    const { data: atualizada } = await supa.from("whatsapp_mensagens").update(r.ok
       ? { status: "enviada", wa_id: r.wa_id ?? null, enviada_em: agora.toISOString(), erro: null }
-      : { status: "falhou", erro: r.erro ?? "falha no envio" }).eq("id", r.id).eq("status", "enviando");
+      : { status: "falhou", erro: r.erro ?? "falha no envio" }).eq("id", r.id).eq("status", "enviando").select("origem, lead_id");
+    // a mensagem da IA não saiu (ex.: número sem WhatsApp): o consultor precisa saber
+    if (!r.ok && atualizada?.[0]?.origem === "ia") await marcarLead(atualizada[0].lead_id, "aguardando", `A mensagem da IA não saiu: ${r.erro ?? "falha no envio"}`);
   }
 
   const minutosAtras = (m: number) => new Date(agora.getTime() - m * 60000).toISOString();
@@ -65,6 +67,7 @@ export async function POST(req: Request) {
     console.error("IA WhatsApp:", e.message);
     return null;
   });
+  await iniciarConversas(agora).catch((e) => console.error("Primeira mensagem WhatsApp:", e.message));
   const { data: fila } = await supa.from("whatsapp_mensagens").select("id")
     .eq("status", "pendente").order("criada_em").limit(5);
   const ids = (fila ?? []).map((m) => m.id);

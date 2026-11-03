@@ -1,7 +1,7 @@
 import { db } from "./supabase";
 import { colocarNome, esconderDados, trocarNomes } from "./dadosPessoais";
 import { textoFormulario } from "./texto";
-import { chaveConversa, variacoesCelular } from "./whatsapp";
+import { chaveConversa, telefoneWhatsapp, variacoesCelular } from "./whatsapp";
 
 // IA que responde no WhatsApp, pelo Gemini. Roda dentro da chamada do conector ao CRM: como ele faz
 // uma chamada por vez, duas respostas nunca são geradas ao mesmo tempo.
@@ -23,9 +23,18 @@ const LOTE = 10;
 const ETAPAS_DA_IA = ["lead", "atendimento", "quente", "frio"]; // reunião, venda e descarte ficam com o consultor
 const CAMPOS_LEAD = "id, nome, status, interesse, valor_pretendido, valor_consorcio, conhece_consorcio";
 
+// Primeira mensagem para lead novo: é a forma de uso que mais arrisca bloqueio do chip, por isso os limites.
+const HORA_INICIO = 8;              // lead que chega fora do horário recebe a partir daqui
+const HORA_FIM = 22;
+const ESPACO_PRIMEIRA_MS = 60_000;  // um lead por minuto: lote de leads não vira rajada
+const LEAD_RECENTE_H = 24;          // lead mais velho que isso não recebe (planilha antiga colada de uma vez)
+const MAX_PRIMEIRA = 1000;
+
 export type ConfigIa = {
   modo: "desligada" | "teste" | "ligada"; numeros_teste: string[] | null; instrucoes: string; exemplos: string;
   erro: string | null; parada_ate: string | null;
+  // só existem depois do SQL 018
+  primeiro_contato?: boolean; primeira_mensagem?: string; primeiro_contato_limite?: number; primeiro_contato_desde?: string | null;
 };
 export type Conversa = {
   chave: string; telefone: string; lead_id: string | null; ultima_recebida_em: string | null;
@@ -302,6 +311,73 @@ export async function responderConversas(agora = new Date()) {
   }
   const proxima = aguardando.find((c) => prontaEm(c) > agora.getTime());
   return proxima ? Math.max(prontaEm(proxima) - Date.now(), 0) : null;
+}
+
+export function dentroDoHorario(agora: Date) {
+  const hora = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", hour: "numeric", hourCycle: "h23" }).format(agora));
+  return hora >= HORA_INICIO && hora < HORA_FIM;
+}
+
+export function erroDaPrimeiraMensagem(texto: string) {
+  const t = texto.trim();
+  if (!t) return "Escreva a primeira mensagem.";
+  if (t.length > MAX_PRIMEIRA) return `A primeira mensagem passa de ${MAX_PRIMEIRA} caracteres.`;
+  const falta = t.match(/\[(?!nome\])[^\]]*\]/i);
+  return falta ? `Troque ${falta[0]} pelo texto de verdade.` : null;
+}
+
+// Lead novo recebe a primeira mensagem sem esperar o consultor. É o texto da tela, sem passar pelo Gemini:
+// nada do lead sai do CRM nesse passo e a cota não é gasta. Quando ele responde, a IA continua.
+export async function iniciarConversas(agora = new Date()) {
+  const supa = db();
+  const { data } = await supa.from("whatsapp_ia").select("*").eq("id", 1).maybeSingle();
+  const config = data as ConfigIa | null;
+  if (!config?.primeiro_contato || !config.primeiro_contato_desde || config.modo === "desligada") return;
+  if (!dentroDoHorario(agora) || erroDaPrimeiraMensagem(config.primeira_mensagem ?? "")) return;
+
+  const novos = supa.from("leads").select("id, nome, telefone").is("whatsapp_contato", null).eq("status", "lead")
+    .like("origem", "sheets:%")
+    .gte("created_at", config.primeiro_contato_desde)
+    .gte("criado_em", new Date(agora.getTime() - LEAD_RECENTE_H * 3_600_000).toISOString())
+    .order("created_at").limit(LOTE);
+  if (config.modo === "teste") novos.in("telefone", (config.numeros_teste ?? []).flatMap(variacoesCelular));
+  const { data: leads } = await novos;
+  if (!leads?.length) return;
+
+  const { data: enviados, count } = await supa.from("leads").select("whatsapp_contato_em", { count: "exact" })
+    .eq("whatsapp_contato", "enviado").gt("whatsapp_contato_em", new Date(agora.getTime() - 86_400_000).toISOString())
+    .order("whatsapp_contato_em", { ascending: false }).limit(1);
+  if ((count ?? 0) >= (config.primeiro_contato_limite ?? 0)) return;
+  const ultimo = enviados?.[0]?.whatsapp_contato_em;
+  if (ultimo && agora.getTime() - new Date(ultimo).getTime() < ESPACO_PRIMEIRA_MS) return;
+
+  for (const lead of leads) {
+    const marcar = (whatsapp_contato: string, extras = {}) =>
+      supa.from("leads").update({ whatsapp_contato, whatsapp_contato_em: agora.toISOString(), ...extras }).eq("id", lead.id);
+    const telefone = telefoneWhatsapp(lead.telefone);
+    if (!telefone) {
+      await marcar("ignorado");
+      continue;
+    }
+    // quem já falou com o chip não recebe um "oi, vi seu formulário"
+    const chave = chaveConversa(telefone);
+    const [conversa, mensagens] = await Promise.all([
+      supa.from("whatsapp_conversas").select("chave").eq("chave", chave).maybeSingle(),
+      supa.from("whatsapp_mensagens").select("id", { count: "exact", head: true }).in("telefone", variacoesCelular(telefone)),
+    ]);
+    if (conversa.data || mensagens.count) {
+      await marcar("ignorado");
+      continue;
+    }
+    const { error } = await supa.from("whatsapp_mensagens").insert({
+      telefone, texto: colocarNome(config.primeira_mensagem!.trim(), lead.nome), lead_id: lead.id,
+      direcao: "enviada", origem: "ia", status: "pendente",
+    });
+    if (error) throw new Error(error.message);
+    await supa.from("whatsapp_conversas").upsert({ chave, telefone, lead_id: lead.id }, { onConflict: "chave" });
+    await marcar("enviado", { whatsapp_status: "ia", whatsapp_motivo: null });
+    return; // um por chamada: o próximo só depois do intervalo
+  }
 }
 
 type Recebida = { telefone: string; em: string; de_mim?: boolean };

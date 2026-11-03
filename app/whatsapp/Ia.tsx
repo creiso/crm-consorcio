@@ -9,6 +9,7 @@ type Conversa = {
 type Situacao = {
   sqlFaltando?: boolean; modo?: Modo; numeros_teste?: string[]; instrucoes?: string; exemplos?: string;
   erro?: string | null; erro_em?: string | null; modelo?: string; chaveConfigurada?: boolean; respostasHoje?: number; conversas?: Conversa[];
+  primeiro_contato?: boolean; primeira_mensagem?: string; primeiro_contato_limite?: number; primeirasHoje?: number;
 };
 type Modo = "desligada" | "teste" | "ligada";
 type Turno = { de: "cliente" | "equipe"; texto: string; nota?: string };
@@ -30,6 +31,11 @@ const MODOS: { id: Modo; titulo: string; texto: string }[] = [
 ];
 const AVISO_LIGADA = "No plano grátis do Gemini, o Google pode usar e pessoas podem ler o que é enviado, e os termos dele pedem para não enviar dados pessoais. "
   + "O CRM esconde nome, telefone, CPF e e-mail, mas outras informações que o cliente escrever podem passar.\n\nLigar a IA para os leads mesmo assim?";
+const MODELO_PRIMEIRA = `Oi, [nome]! Aqui é [seu nome], da [empresa]. Vi que você preencheu nosso formulário sobre consórcio. Você está buscando para imóvel, carro, moto ou serviços?
+
+Se preferir não receber mensagens, é só me avisar.`;
+const AVISO_PRIMEIRA = "A partir de agora, cada lead novo que chegar pelas planilhas recebe esta mensagem sozinho, pelo número do chip.\n\n"
+  + "Mandar a primeira mensagem de forma automática é o uso que mais arrisca bloqueio, e um bloqueio pode fazer você perder o número. Ligar mesmo assim?";
 const hora = (iso: string) => new Date(iso).toLocaleString("pt-BR", {
   timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
 });
@@ -41,6 +47,9 @@ export default function Ia() {
   const [numeros, setNumeros] = useState("");
   const [instrucoes, setInstrucoes] = useState("");
   const [exemplos, setExemplos] = useState("");
+  const [primeiroContato, setPrimeiroContato] = useState(false);
+  const [primeira, setPrimeira] = useState("");
+  const [limite, setLimite] = useState("30");
   const [carregado, setCarregado] = useState(false);
   const [alterado, setAlterado] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -59,6 +68,9 @@ export default function Ia() {
       setNumeros((r.numeros_teste ?? []).join(", "));
       setInstrucoes(r.instrucoes || MODELO_INSTRUCOES);
       setExemplos(r.exemplos ?? "");
+      setPrimeiroContato(!!r.primeiro_contato);
+      setPrimeira(r.primeira_mensagem || MODELO_PRIMEIRA);
+      setLimite(String(r.primeiro_contato_limite ?? 30));
       setCarregado(true);
     });
     const t = setInterval(() => { if (document.visibilityState === "visible") load(); }, ATUALIZA_MS);
@@ -67,9 +79,13 @@ export default function Ia() {
 
   async function salvar() {
     if (modo === "ligada" && s?.modo !== "ligada" && !window.confirm(AVISO_LIGADA)) return false;
+    if (primeiroContato && modo === "ligada" && !(s?.primeiro_contato && s?.modo === "ligada") && !window.confirm(AVISO_PRIMEIRA)) return false;
     setSalvando(true);
     setAviso(null);
-    const r = await fetch("/api/whatsapp/ia", { method: "PUT", body: JSON.stringify({ modo, numeros_teste: numeros, instrucoes, exemplos }) });
+    const r = await fetch("/api/whatsapp/ia", { method: "PUT", body: JSON.stringify({
+      modo, numeros_teste: numeros, instrucoes, exemplos,
+      primeiro_contato: primeiroContato, primeira_mensagem: primeira, primeiro_contato_limite: Number(limite),
+    }) });
     const j = await r.json().catch(() => ({})) as { error?: string; numeros_teste?: string[] };
     setSalvando(false);
     if (!r.ok) {
@@ -84,6 +100,15 @@ export default function Ia() {
   }
 
   const mudou = <T,>(f: (v: T) => void) => (v: T) => { f(v); setAlterado(true); };
+
+  // manda a mensagem salva para os números de teste, para ver como ela chega
+  async function enviarPrimeira() {
+    if (alterado && !(await salvar())) return;
+    setAviso(null);
+    const r = await fetch("/api/whatsapp/ia/primeira", { method: "POST" });
+    const j = await r.json().catch(() => ({})) as { error?: string; enviados?: number };
+    setAviso(r.ok ? { ok: true, texto: `Na fila para ${j.enviados} número(s) de teste.` } : { ok: false, texto: j.error ?? "Não foi possível enviar." });
+  }
 
   async function conversa(chave: string, acao: "pausar" | "devolver") {
     await fetch("/api/whatsapp/conversa", { method: "PATCH", body: JSON.stringify({ chave, acao }) });
@@ -124,6 +149,29 @@ export default function Ia() {
         </label>
 
         <Exemplos valor={exemplos} onChange={mudou(setExemplos)} />
+
+        <div className="wa-campo">
+          Primeira mensagem
+          {s.primeira_mensagem === undefined ? <small>Rode o SQL 018_primeira_mensagem.sql no Supabase para ativar.</small> : (
+            <>
+              <label className="wa-opcao" style={{ fontWeight: 400 }}>
+                <input type="checkbox" checked={primeiroContato} onChange={(e) => mudou(setPrimeiroContato)(e.target.checked)} />
+                <span>
+                  <b>Iniciar a conversa quando chegar lead novo</b>
+                  <small>Vale para quem chegar pelas planilhas depois de ligar, das 8h às 22h. Quem chegar fora desse horário recebe a partir das 8h. Em &quot;Só números de teste&quot;, só esses números recebem.</small>
+                </span>
+              </label>
+              <textarea rows={5} maxLength={1000} value={primeira} onChange={(e) => mudou(setPrimeira)(e.target.value)} />
+              <small>Troque o que está entre colchetes; só [nome] fica, e vira o primeiro nome do lead. Diga quem é e de onde veio o contato: quem não reconhece a mensagem denuncia, e denúncia é o que mais bloqueia o número.</small>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 400 }}>
+                Máximo por dia
+                <input type="number" min={1} max={200} style={{ width: 80 }} value={limite} onChange={(e) => mudou(setLimite)(e.target.value)} />
+              </label>
+              <small>{s.primeirasHoje ?? 0} enviadas nas últimas 24 h. No máximo um lead por minuto. Quem passar do limite fica com o consultor.</small>
+              <div><button type="button" className="btn secondary" onClick={enviarPrimeira}>Enviar agora para os números de teste</button></div>
+            </>
+          )}
+        </div>
 
         {aviso && <small style={{ color: aviso.ok ? "#006300" : "#b4232c" }}>{aviso.texto}</small>}
         <div><button className="btn" disabled={salvando} onClick={salvar}>{salvando ? "Salvando…" : "Salvar"}</button></div>
