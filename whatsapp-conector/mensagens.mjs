@@ -77,9 +77,10 @@ const ATIVO_POR_MS = 5 * 60_000; // depois de uma mensagem, continua rápido por
 const ERRO_MAX_MS = 60_000;
 
 // Rápido em horário comercial e logo depois de uma mensagem; devagar no resto, para gastar pouco da Vercel.
-export function esperaAteProximaChamada({ falhas, pendencias, estado, ultimaAtividade }, agora = new Date()) {
+export function esperaAteProximaChamada({ falhas, pendencias, estado, ultimaAtividade, chamarEm = null }, agora = new Date()) {
   if (falhas) return Math.min(RAPIDO_MS * 2 ** (falhas - 1), ERRO_MAX_MS);
   if (pendencias) return LOGO_MS;
-  if (estado === "qr" || agora.getTime() - ultimaAtividade < ATIVO_POR_MS || emExpediente(agora)) return RAPIDO_MS;
-  return LENTO_MS;
+  const normal = estado === "qr" || agora.getTime() - ultimaAtividade < ATIVO_POR_MS || emExpediente(agora) ? RAPIDO_MS : LENTO_MS;
+  // o CRM avisa quando a próxima resposta da IA fica pronta: chama na hora certa
+  return chamarEm === null ? normal : Math.max(LOGO_MS, Math.min(chamarEm, normal));
 }

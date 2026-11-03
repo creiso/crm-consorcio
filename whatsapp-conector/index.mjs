@@ -89,6 +89,7 @@ function avisarCrm() {
 async function chamarCrm() {
   chamando = true;
   chamarDeNovo = false;
+  let chamarEm = null;
   try {
     const recebidas = fila.recebidas.slice(0, LOTE);
     const resultados = fila.resultados.slice(0, LOTE);
@@ -101,7 +102,7 @@ async function chamarCrm() {
         signal: AbortSignal.timeout(PRAZO_CRM_MS),
       });
       if (!r.ok) throw new Error(`o CRM respondeu ${r.status}`);
-      ({ enviar = [] } = await r.json());
+      ({ enviar = [], chamar_em_ms: chamarEm = null } = await r.json());
       // só sai da fila depois da confirmação
       fila.recebidas.splice(0, recebidas.length);
       fila.resultados.splice(0, resultados.length);
@@ -116,7 +117,7 @@ async function chamarCrm() {
   } finally {
     chamando = false;
     const pendencias = chamarDeNovo || fila.recebidas.length > 0 || fila.resultados.length > 0;
-    agendar(esperaAteProximaChamada({ falhas: falhasCrm, pendencias, estado, ultimaAtividade }));
+    agendar(esperaAteProximaChamada({ falhas: falhasCrm, pendencias, estado, ultimaAtividade, chamarEm }));
   }
 }
 

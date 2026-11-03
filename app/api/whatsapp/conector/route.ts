@@ -61,7 +61,10 @@ export async function POST(req: Request) {
 
   // entrega a fila só com o WhatsApp conectado; "enviando" impede de sair duas vezes
   if (c.estado !== "conectado") return NextResponse.json({ enviar: [] });
-  await responderConversas(agora).catch((e) => console.error("IA WhatsApp:", e.message));
+  const chamarEm = await responderConversas(agora).catch((e) => {
+    console.error("IA WhatsApp:", e.message);
+    return null;
+  });
   const { data: fila } = await supa.from("whatsapp_mensagens").select("id")
     .eq("status", "pendente").order("criada_em").limit(5);
   const ids = (fila ?? []).map((m) => m.id);
@@ -69,5 +72,5 @@ export async function POST(req: Request) {
     ? await supa.from("whatsapp_mensagens").update({ status: "enviando", enviando_em: agora.toISOString() })
       .in("id", ids).eq("status", "pendente").select("id, telefone, texto")
     : { data: [] };
-  return NextResponse.json({ enviar: enviar ?? [] });
+  return NextResponse.json({ enviar: enviar ?? [], chamar_em_ms: chamarEm });
 }

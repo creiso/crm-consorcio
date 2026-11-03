@@ -9,13 +9,14 @@ import { chaveConversa, variacoesCelular } from "./whatsapp";
 export const MODELO = process.env.GEMINI_MODELO || "gemini-3.5-flash-lite";
 const ENDERECO = "https://generativelanguage.googleapis.com/v1beta/models";
 
-const ESPERA_SEG = 20;              // deixa a pessoa terminar: muita gente manda várias mensagens curtas seguidas
+const ESPERA_MS = 6_000;            // deixa a pessoa terminar: muita gente manda várias mensagens curtas seguidas
 const LIMITE_MENSAGEM_H = 12;       // mais velha que isso (conector fora do ar) fica para o consultor
 const MAX_POR_CONVERSA_DIA = 20;    // evita conversa sem fim com outro robô
 const MAX_POR_DIA = 300;            // protege o chip e a cota do Gemini
 const MAX_TENTATIVAS = 3;
-const ESPERA_ERRO_MS = 60_000;
-const PRAZO_GEMINI_MS = 25_000;
+const ESPERA_ERRO_MS = 60_000;      // limite da cota ou chave errada
+const ESPERA_FALHA_MS = 5_000;      // demora ou instabilidade do Gemini: tenta de novo logo
+const PRAZO_GEMINI_MS = 15_000;
 const TEMPO_MAX_MS = 20_000;        // a chamada do conector não pode ficar presa aqui
 const HISTORICO = 30;
 const LOTE = 10;
@@ -244,7 +245,8 @@ async function responderUma(conversa: Conversa, config: ConfigIa, agora: Date) {
       return true;
     }
     await supa.from("whatsapp_ia").update({
-      erro: erro.message, erro_em: agora.toISOString(), parada_ate: new Date(agora.getTime() + ESPERA_ERRO_MS).toISOString(),
+      erro: erro.message, erro_em: agora.toISOString(),
+      parada_ate: new Date(Date.now() + (erro.tipo === "falha" ? ESPERA_FALHA_MS : ESPERA_ERRO_MS)).toISOString(),
     }).eq("id", 1);
     if (conversa.tentativas_ia + 1 >= MAX_TENTATIVAS || erro.tipo === "configuracao") await paraConsultor(conversa, "A IA está fora do ar", false, agora);
     else await supa.from("whatsapp_conversas").update({ tentativas_ia: conversa.tentativas_ia + 1 }).eq("chave", conversa.chave);
@@ -281,19 +283,25 @@ async function responderUma(conversa: Conversa, config: ConfigIa, agora: Date) {
 }
 
 // Trata as conversas com mensagem nova; a resposta sai na mesma chamada do conector.
+// Devolve em quantos ms a próxima fica pronta, para o conector chamar de novo na hora certa.
 export async function responderConversas(agora = new Date()) {
   const supa = db();
-  const { data: fila } = await supa.from("whatsapp_conversas").select("*").eq("aguardando_ia", true)
-    .lt("ultima_recebida_em", new Date(agora.getTime() - ESPERA_SEG * 1000).toISOString())
-    .order("ultima_recebida_em").limit(LOTE);
-  if (!fila?.length) return;
-  const { data: config } = await supa.from("whatsapp_ia").select("*").eq("id", 1).maybeSingle();
-  if (!config) return;
-  const inicio = Date.now();
-  for (const conversa of fila as Conversa[]) {
-    if (Date.now() - inicio > TEMPO_MAX_MS) break;
-    if (!(await responderUma(conversa, config as ConfigIa, agora))) break;
+  const { data } = await supa.from("whatsapp_conversas").select("*").eq("aguardando_ia", true).order("ultima_recebida_em").limit(LOTE);
+  const aguardando = (data ?? []) as Conversa[];
+  if (!aguardando.length) return null;
+  const prontaEm = (c: Conversa) => new Date(c.ultima_recebida_em ?? 0).getTime() + ESPERA_MS;
+  const fila = aguardando.filter((c) => prontaEm(c) <= agora.getTime());
+  if (fila.length) {
+    const { data: config } = await supa.from("whatsapp_ia").select("*").eq("id", 1).maybeSingle();
+    if (!config) return null;
+    const inicio = Date.now();
+    for (const conversa of fila) {
+      if (Date.now() - inicio > TEMPO_MAX_MS) break;
+      if (!(await responderUma(conversa, config as ConfigIa, agora))) break;
+    }
   }
+  const proxima = aguardando.find((c) => prontaEm(c) > agora.getTime());
+  return proxima ? Math.max(prontaEm(proxima) - Date.now(), 0) : null;
 }
 
 type Recebida = { telefone: string; em: string; de_mim?: boolean };
