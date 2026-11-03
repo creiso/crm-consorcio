@@ -1,4 +1,4 @@
-import { readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,9 +26,14 @@ const ESPERA_RECUSADO_MS = 5 * 60_000;
 const logger = pino({ level: process.env.LOG_NIVEL ?? "silent" });
 // A biblioteca de criptografia escreve chaves de sessão no console, então nada mais sai por ali.
 // O registro só tem estas linhas: nunca texto de mensagem, telefone, QR code nem segredo.
-const escrever = console.log.bind(console);
 for (const nivel of ["log", "info", "warn", "error", "debug", "trace"]) console[nivel] = () => {};
-const log = (...a) => escrever(new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }), ...a);
+function log(...a) {
+  try {
+    appendFileSync("conector.log", [new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }), ...a].join(" ") + "\n");
+  } catch {
+    // sem registro o conector continua funcionando
+  }
+}
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function comPrazo(promessa, ms = PRAZO_WHATSAPP_MS) {
