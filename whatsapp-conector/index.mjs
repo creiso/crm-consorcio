@@ -19,13 +19,16 @@ const LOTE = 50;                  // itens por chamada ao CRM
 const LOGO_MS = 300;
 const PAUSA_ENVIO_MS = 1500;      // entre uma mensagem enviada e outra
 const PRAZO_WHATSAPP_MS = 30_000;
-const PRAZO_CRM_MS = 30_000;
+const PRAZO_CRM_MS = 70_000;       // a resposta da IA é gerada dentro da chamada ao CRM
 const RECONEXAO_MAX_MS = 60_000;
 const ESPERA_RECUSADO_MS = 5 * 60_000;
 
 const logger = pino({ level: process.env.LOG_NIVEL ?? "silent" });
-// nunca registra texto de mensagem, telefone, QR code nem segredo
-const log = (...a) => console.log(new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }), ...a);
+// A biblioteca de criptografia escreve chaves de sessão no console, então nada mais sai por ali.
+// O registro só tem estas linhas: nunca texto de mensagem, telefone, QR code nem segredo.
+const escrever = console.log.bind(console);
+for (const nivel of ["log", "info", "warn", "error", "debug", "trace"]) console[nivel] = () => {};
+const log = (...a) => escrever(new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }), ...a);
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function comPrazo(promessa, ms = PRAZO_WHATSAPP_MS) {

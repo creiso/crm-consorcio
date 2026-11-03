@@ -312,3 +312,19 @@ span.tag { cursor: default; }
 .wa-msg.recebida { background: #f1f3f6; margin-right: 24px; }
 .wa-msg.enviada { background: #eef4fc; margin-left: 24px; }
 .wa-msg .wa-erro { color: #b4232c; }
+
+/* IA do WhatsApp */
+.wa-opcoes { display: grid; gap: 6px; }
+.wa-opcao { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; font-size: 13px; }
+.wa-opcao input { width: auto; margin-top: 2px; flex-shrink: 0; }
+.wa-opcao small { display: block; color: var(--muted); }
+.wa-campo { display: grid; gap: 4px; font-size: 13px; font-weight: 600; }
+.wa-campo small { font-weight: 400; color: var(--muted); }
+.wa-campo textarea, .wa-campo input { font-weight: 400; }
+.wa-pessoas { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+.wa-pessoas label { display: flex; gap: 6px; align-items: center; overflow-wrap: anywhere; }
+.wa-pessoas input { width: auto; }
+.wa-conversa { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; overflow-wrap: anywhere; }
+.wa-conversa small { display: block; color: var(--muted); }
+.wa-conversa .btn { flex-shrink: 0; }
+.badge-wa { font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 999px; background: #fff4d6; color: #7a4f00; white-space: nowrap; }

@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import QRCode from "qrcode";
+import Ia from "./Ia";
 
 type Mensagem = {
   id: string; telefone: string; direcao: "recebida" | "enviada"; origem: string; texto: string;
@@ -111,6 +112,7 @@ export default function Whatsapp() {
                   {m.direcao === "recebida" ? "← " : "→ "}
                   {m.leads?.nome ?? m.telefone} · {hora(m.criada_em)}
                   {m.origem === "celular" && " · pelo celular"}
+                  {m.origem === "ia" && " · 🤖 IA"}
                   {m.direcao === "enviada" && ` · ${STATUS[m.status] ?? m.status}`}
                 </small>
                 <div>{m.texto}</div>
@@ -120,6 +122,8 @@ export default function Whatsapp() {
           </div>
         </div>
       </div>
+
+      <Ia />
     </>
   );
 }

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { STATUSES, LeadStatus, brl } from "@/lib/supabase";
 import Avatar from "../Avatar";
 import { textoFormulario } from "@/lib/texto";
+import ConversaWhatsapp from "./ConversaWhatsapp";
 
 type Lead = {
   id: string; nome: string; telefone: string | null; email: string | null; cidade: string | null;
@@ -13,6 +14,7 @@ type Lead = {
   vendedor_id: string | null; vendedores: { nome: string; foto_url: string | null } | null;
   equipe_id: string | null; equipes: { nome: string } | null;
   reuniao_em?: string | null; reuniao_status?: "agendada" | "feita" | "nao_compareceu" | null; reuniao_remarcacoes?: number | null;
+  whatsapp_status?: string | null; whatsapp_motivo?: string | null;
   dados_extras: Record<string, unknown> | null;
 };
 type CorpoReuniao = { status?: "reuniao"; reuniao: { acao: "agendar" | "feita" | "nao_compareceu"; em?: string } };
@@ -263,6 +265,8 @@ export default function Kanban() {
                       <div className="lead-top">
                         <strong>{l.nome}</strong>
                         {novos.has(l.id) && <span className="badge-novo">novo</span>}
+                        {l.whatsapp_status === "aguardando" && <span className="badge-wa" title={l.whatsapp_motivo ?? "Cliente esperando resposta no WhatsApp"}>🔔 WhatsApp</span>}
+                        {l.whatsapp_status === "ia" && <span title="A IA está respondendo no WhatsApp">🤖</span>}
                       </div>
                       {valor && <div className="lead-valor">{valor}</div>}
                       {rendaLead && <div className="lead-valor"><span className="lead-rotulo">Renda</span> {rendaLead}</div>}
@@ -355,6 +359,8 @@ function Detalhe({ lead, lider, mostrarEquipe, vendedores, nomeEquipe, onClose, 
         </div>
 
         {wa && <a className="btn btn-wa" href={wa} target="_blank" rel="noreferrer">💬 Chamar no WhatsApp</a>}
+
+        <ConversaWhatsapp leadId={lead.id} status={lead.whatsapp_status} motivo={lead.whatsapp_motivo} />
 
         <section>
           {linha("Valor do consórcio", valorConsorcio(lead))}

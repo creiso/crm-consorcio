@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "crypto";
 import { db } from "./supabase";
 
 // WhatsApp pela API própria: o conector no PC do escritório só faz conexões de saída.
@@ -24,6 +25,20 @@ export function variacoesCelular(tel: string) {
   if (local.length === 11 && local[2] === "9") locais.add(local.slice(0, 2) + local.slice(3));
   if (local.length === 10) locais.add(local.slice(0, 2) + "9" + local.slice(2));
   return [...locais].flatMap((l) => [l, "55" + l]);
+}
+
+// O mesmo celular com ou sem o 9 é uma conversa só: "5542999060600" e "554299060600" viram "554299060600"
+export function chaveConversa(tel: string) {
+  return /^55\d{2}9\d{8}$/.test(tel) ? tel.slice(0, 4) + tel.slice(5) : tel;
+}
+
+// O conector se autentica pelo segredo dele, não por login.
+export function conectorAutorizado(req: Request) {
+  const segredo = process.env.WHATSAPP_CONECTOR_SECRET;
+  if (!segredo) return false;
+  const a = Buffer.from(req.headers.get("authorization") ?? "");
+  const b = Buffer.from(`Bearer ${segredo}`);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 // Lead de cada telefone (o mais antigo, se houver mais de um)

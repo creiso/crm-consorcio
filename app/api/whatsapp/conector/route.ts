@@ -1,26 +1,19 @@
-import { timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
-import { LIMITE_ENVIANDO_MIN, LIMITE_PENDENTE_MIN, leadsDosTelefones } from "@/lib/whatsapp";
+import { atualizarConversas, responderConversas } from "@/lib/ia";
+import { LIMITE_ENVIANDO_MIN, LIMITE_PENDENTE_MIN, conectorAutorizado, leadsDosTelefones } from "@/lib/whatsapp";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // a resposta da IA é gerada dentro desta chamada
 
 type Recebida = { wa_id: string; telefone: string; texto: string; em: string; de_mim?: boolean };
 type Resultado = { id: string; ok: boolean; wa_id?: string; erro?: string };
 type Corpo = { estado?: string; qr?: string | null; numero?: string | null; aviso?: string | null; recebidas?: Recebida[]; resultados?: Resultado[] };
 
-function autorizado(req: Request) {
-  const segredo = process.env.WHATSAPP_CONECTOR_SECRET;
-  if (!segredo) return false;
-  const a = Buffer.from(req.headers.get("authorization") ?? "");
-  const b = Buffer.from(`Bearer ${segredo}`);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
-// Única rota do conector (autenticada pelo segredo dele, não por login).
+// Rota principal do conector (autenticada pelo segredo dele, não por login).
 // Ele conta como está e o que chegou; a resposta traz o que ele precisa enviar.
 export async function POST(req: Request) {
-  if (!autorizado(req)) return NextResponse.json({ error: "não autorizado" }, { status: 401 });
+  if (!conectorAutorizado(req)) return NextResponse.json({ error: "não autorizado" }, { status: 401 });
   const c = (await req.json().catch(() => ({}))) as Corpo;
   const supa = db();
   const agora = new Date();
@@ -51,6 +44,7 @@ export async function POST(req: Request) {
     })), { onConflict: "wa_id", ignoreDuplicates: true });
     // sem confirmar, o conector tenta de novo na próxima chamada
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await atualizarConversas(recebidas, leads, agora).catch((e) => console.error("Conversas WhatsApp:", e.message));
   }
 
   for (const r of c.resultados ?? []) {
@@ -67,6 +61,7 @@ export async function POST(req: Request) {
 
   // entrega a fila só com o WhatsApp conectado; "enviando" impede de sair duas vezes
   if (c.estado !== "conectado") return NextResponse.json({ enviar: [] });
+  await responderConversas(agora).catch((e) => console.error("IA WhatsApp:", e.message));
   const { data: fila } = await supa.from("whatsapp_mensagens").select("id")
     .eq("status", "pendente").order("criada_em").limit(5);
   const ids = (fila ?? []).map((m) => m.id);
