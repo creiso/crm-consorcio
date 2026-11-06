@@ -23,7 +23,7 @@ const LINHAS_EQUIPES = 5;
 const TZ = "America/Sao_Paulo";
 const MEDALHA = ["🥇", "🥈", "🥉"];
 const TIPO: Record<string, string> = { imovel: "🏠 Imóvel", automovel: "🚗 Automóvel", servicos: "🛠️ Serviços" };
-const CONFETE = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181"];
+const CONFETE = ["#8f2fc2", "#00d2e8", "#19e07b", "#f5c242", "#1f9fc9"];
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const brlCurto = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -131,7 +131,7 @@ export default function Placar({ equipeInicial }: { equipeInicial: string }) {
     <div ref={raiz} className={`placar ${ocioso ? "ocioso" : ""}`} onMouseMove={mexeu}>
       <header className="pl-topo">
         <div>
-          <div className="pl-marca">Placar de vendas</div>
+          <div className="pl-marca"><img src="/onioncrm-marca.png" alt="" className="pl-logo" />Placar de vendas</div>
           <div className="pl-sub">
             {dados?.titulo ?? " "}
             {dados?.equipe && <span className="pl-sub-equipe">{dados.equipe.nome}</span>}

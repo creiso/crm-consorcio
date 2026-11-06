@@ -31,6 +31,7 @@ export default function Login() {
 
   return (
     <form onSubmit={entrar} className="card" style={{ maxWidth: 360, margin: "60px auto", display: "grid", gap: 10 }}>
+      <img src="/onioncrm.png" alt="OnionCRM" className="logo-entrada" />
       <h1 style={{ margin: 0 }}>Entrar</h1>
       <input type="email" placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} required />
       <input type="password" placeholder="Senha" value={senha} onChange={(e) => setSenha(e.target.value)} required />

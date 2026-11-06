@@ -1,4 +1,4 @@
-# CRM Consórcio (MVP) — Next.js + Supabase + Vercel
+# OnionCRM — CRM de consórcio (Next.js + Supabase + Vercel)
 
 - **Dashboard** (`/`): volume vendido, pagamentos concluídos, ticket médio, conversão, ranking por vendedor e lista de vendas (valor, grupo/cota, vendedor, status do pagamento — clique na etiqueta para alterar).
 - **Kanban** (`/kanban`): Lead → Em atendimento → Quente → Frio → Venda → Descarte. Arrastar para **Venda** abre o formulário (vendedor, valor, tipo, grupo, cota). Atualiza a cada 30 s.

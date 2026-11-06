@@ -1,9 +1,9 @@
 {
   "name": "crm-consorcio-app",
-  "productName": "CRM Consórcio",
-  "version": "1.0.0",
-  "description": "App do CRM Consórcio para Windows",
-  "author": "CRM Consórcio",
+  "productName": "OnionCRM",
+  "version": "1.1.0",
+  "description": "App do OnionCRM para Windows",
+  "author": "OnionCRM",
   "private": true,
   "type": "module",
   "main": "main.mjs",
@@ -13,7 +13,7 @@
   },
   "build": {
     "appId": "br.com.crmconsorcio.app",
-    "artifactName": "CRM-Consorcio-Setup-${version}.${ext}",
+    "artifactName": "OnionCRM-Setup-${version}.${ext}",
     "npmRebuild": false,
     "directories": {
       "output": "dist",
@@ -41,7 +41,8 @@
       "language": "1046",
       "installerIcon": "recursos/icone.ico",
       "uninstallerIcon": "recursos/icone.ico",
-      "uninstallDisplayName": "CRM Consórcio"
+      "uninstallDisplayName": "OnionCRM",
+      "include": "recursos/instalador.nsh"
     },
     "electronFuses": {
       "runAsNode": false,

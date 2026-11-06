@@ -23,6 +23,7 @@ export default function EsqueciSenha() {
   if (enviado)
     return (
       <div className="card" style={{ maxWidth: 380, margin: "60px auto", display: "grid", gap: 12 }}>
+        <img src="/onioncrm.png" alt="OnionCRM" className="logo-entrada" />
         <h1 style={{ margin: 0 }}>Pedido enviado ✓</h1>
         <p style={{ margin: 0, color: "var(--muted)" }}>
           O administrador foi avisado e vai definir uma senha nova para você. Assim que ele te passar a senha, é só entrar com ela.
@@ -33,6 +34,7 @@ export default function EsqueciSenha() {
 
   return (
     <form onSubmit={pedir} className="card" style={{ maxWidth: 380, margin: "60px auto", display: "grid", gap: 10 }}>
+      <img src="/onioncrm.png" alt="OnionCRM" className="logo-entrada" />
       <h1 style={{ margin: 0 }}>Esqueci minha senha</h1>
       <p style={{ margin: 0, color: "var(--muted)", fontSize: 13 }}>
         Informe o e-mail que você usa para entrar. O administrador recebe o pedido e define uma senha nova para você.

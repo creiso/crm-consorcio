@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { STATUSES, LeadStatus, brl } from "@/lib/supabase";
 import Avatar from "../Avatar";
 import { textoFormulario } from "@/lib/texto";
+import { MAX_OBS_DESCARTE, MOTIVOS_DESCARTE, nomeDoMotivo } from "@/lib/descarte";
 import ConversaWhatsapp from "./ConversaWhatsapp";
 
 type Lead = {
@@ -15,6 +16,7 @@ type Lead = {
   equipe_id: string | null; equipes: { nome: string } | null;
   reuniao_em?: string | null; reuniao_status?: "agendada" | "feita" | "nao_compareceu" | null; reuniao_remarcacoes?: number | null;
   whatsapp_status?: string | null; whatsapp_motivo?: string | null;
+  motivo_descarte?: string | null; descarte_obs?: string | null;
   dados_extras: Record<string, unknown> | null;
 };
 type CorpoReuniao = { status?: "reuniao"; reuniao: { acao: "agendar" | "feita" | "nao_compareceu"; em?: string } };
@@ -110,6 +112,7 @@ export default function Kanban() {
   const [over, setOver] = useState<string | null>(null);
   const [vendaLead, setVendaLead] = useState<Lead | null>(null);
   const [reuniaoLead, setReuniaoLead] = useState<{ lead: Lead; modo: "agendar" | "nao_compareceu" } | null>(null);
+  const [descarteLead, setDescarteLead] = useState<Lead | null>(null);
   const [aviso, setAviso] = useState("");
   const [faltaSqlReuniao, setFaltaSqlReuniao] = useState(false);
   const [aberto, setAberto] = useState<string | null>(null);
@@ -191,7 +194,18 @@ export default function Kanban() {
     if (!lead || lead.status === status) return;
     if (status === "venda") return setVendaLead(lead);
     if (status === "reuniao") return setReuniaoLead({ lead, modo: "agendar" }); // pede data e horário
+    if (status === "descarte") return setDescarteLead(lead); // pede o motivo
     patch(id, { status });
+  }
+
+  // salva e devolve a mensagem de erro (ou null); aviso do servidor (ex.: falta SQL) aparece embaixo
+  async function salvarLead(id: string, corpo: Record<string, unknown>) {
+    const r = await fetch("/api/leads", { method: "PATCH", body: JSON.stringify({ id, ...corpo }) });
+    const j = await r.json().catch(() => ({})) as { error?: string; aviso?: string };
+    if (!r.ok) return j.error ?? "não foi possível salvar";
+    if (j.aviso) { setAviso(j.aviso); setTimeout(() => setAviso(""), 8000); }
+    load();
+    return null;
   }
 
   // agendar / feita / não apareceu: devolve a mensagem de erro (ou null se deu certo)
@@ -271,6 +285,7 @@ export default function Kanban() {
                       {valor && <div className="lead-valor">{valor}</div>}
                       {rendaLead && <div className="lead-valor"><span className="lead-rotulo">Renda</span> {rendaLead}</div>}
                       {l.cidade && <small>📍 {l.cidade}</small>}
+                      {l.status === "descarte" && nomeDoMotivo(l.motivo_descarte) && <span className="chip-descarte">{nomeDoMotivo(l.motivo_descarte)}</span>}
                       {l.status === "reuniao" && (
                         <SeloReuniao lead={l} onFeita={() => reuniaoFeita(l)}
                           onNaoVeio={() => setReuniaoLead({ lead: l, modo: "nao_compareceu" })}
@@ -307,7 +322,17 @@ export default function Kanban() {
           onVendedor={(vendedor_id) => patch(leadAberto.id, { vendedor_id: vendedor_id || null })}
           onReuniao={(modo) => setReuniaoLead({ lead: leadAberto, modo })}
           onReuniaoFeita={() => reuniaoFeita(leadAberto)}
+          onDescarte={() => setDescarteLead(leadAberto)}
+          salvar={(corpo) => salvarLead(leadAberto.id, corpo)}
         />
+      )}
+      {descarteLead && (
+        <DescarteModal lead={descarteLead} onClose={() => setDescarteLead(null)}
+          enviar={async (corpo) => {
+            const erro = await salvarLead(descarteLead.id, corpo);
+            if (!erro) setDescarteLead(null);
+            return erro;
+          }} />
       )}
       {reuniaoLead && (
         <ReuniaoModal {...reuniaoLead} onClose={() => setReuniaoLead(null)}
@@ -327,11 +352,13 @@ export default function Kanban() {
 
 // Painel lateral com os dados do lead.
 // Admin e coordenador (líderes) trocam o vendedor; o coordenador só recebe a lista da equipe dele.
-function Detalhe({ lead, lider, mostrarEquipe, vendedores, nomeEquipe, onClose, onStatus, onVendedor, onReuniao, onReuniaoFeita }: {
+function Detalhe({ lead, lider, mostrarEquipe, vendedores, nomeEquipe, onClose, onStatus, onVendedor, onReuniao, onReuniaoFeita, onDescarte, salvar }: {
   lead: Lead; lider: boolean; mostrarEquipe: boolean; vendedores: Vendedor[]; nomeEquipe: (id?: string | null) => string | undefined;
   onClose: () => void; onStatus: (s: LeadStatus) => void; onVendedor: (id: string) => void;
   onReuniao: (modo: "agendar" | "nao_compareceu") => void; onReuniaoFeita: () => void;
+  onDescarte: () => void; salvar: (corpo: Record<string, unknown>) => Promise<string | null>;
 }) {
+  const [editando, setEditando] = useState(false);
   const wa = whatsapp(lead.telefone);
   // o que já aparece nas seções acima não se repete em "outros dados"
   const usados = ["renda", "salario", "conhece", "sabe como funciona", "created time", "valor do consorcio",
@@ -355,24 +382,45 @@ function Detalhe({ lead, lider, mostrarEquipe, vendedores, nomeEquipe, onClose, 
       <aside className="drawer" onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
           <h2 style={{ margin: 0, fontSize: 20 }}>{lead.nome}</h2>
-          <button className="btn secondary" onClick={onClose}>✕</button>
+          <span style={{ display: "flex", gap: 6 }}>
+            {!editando && <button className="btn secondary" onClick={() => setEditando(true)}>✏️ Editar</button>}
+            <button className="btn secondary" onClick={onClose} aria-label="Fechar">✕</button>
+          </span>
         </div>
 
         {wa && <a className="btn btn-wa" href={wa} target="_blank" rel="noreferrer">💬 Chamar no WhatsApp</a>}
 
         <ConversaWhatsapp leadId={lead.id} status={lead.whatsapp_status} motivo={lead.whatsapp_motivo} />
 
-        <section>
-          {linha("Valor do consórcio", valorConsorcio(lead))}
-          {linha("Renda mensal", renda(lead))}
-          {linha("Cidade", lead.cidade)}
-          {linha("Conhece consórcio", conhece(lead))}
-          {linha("Criado em", fmtData(criadoEm(lead), true) + " (Brasília)")}
-          {linha("Telefone", lead.telefone)}
-          {linha("E-mail", lead.email)}
-          {lead.interesse && linha("Interesse", lead.interesse)}
-          {lead.observacoes && linha("Observações", lead.observacoes)}
-        </section>
+        {editando ? (
+          <EditarLead lead={lead} onCancelar={() => setEditando(false)}
+            salvar={async (dados) => {
+              const erro = await salvar({ dados });
+              if (!erro) setEditando(false);
+              return erro;
+            }} />
+        ) : (
+          <section>
+            {linha("Valor do consórcio", valorConsorcio(lead))}
+            {linha("Renda mensal", renda(lead))}
+            {linha("Cidade", lead.cidade)}
+            {linha("Conhece consórcio", conhece(lead))}
+            {linha("Criado em", fmtData(criadoEm(lead), true) + " (Brasília)")}
+            {linha("Telefone", lead.telefone)}
+            {linha("E-mail", lead.email)}
+            {lead.interesse && linha("Interesse", lead.interesse)}
+            {lead.observacoes && linha("Observações", lead.observacoes)}
+          </section>
+        )}
+
+        {lead.status === "descarte" && (
+          <section style={{ display: "grid", gap: 6 }}>
+            <div className="det-label">Motivo do descarte</div>
+            <b style={{ fontWeight: 500 }}>{nomeDoMotivo(lead.motivo_descarte) ?? "Não informado"}</b>
+            {lead.descarte_obs && <small style={{ color: "var(--muted)", overflowWrap: "anywhere" }}>{lead.descarte_obs}</small>}
+            <div><button className="btn secondary" onClick={onDescarte}>{lead.motivo_descarte ? "Trocar motivo" : "Informar motivo"}</button></div>
+          </section>
+        )}
 
         {lead.reuniao_em && lead.reuniao_status && (
           <section>
@@ -474,6 +522,97 @@ function VendaModal({ lead, vendedores, onClose, onSaved }: {
           <button className="btn" onClick={salvar}>Salvar venda</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Corrigir os dados do lead. O que for mudado aqui não volta ao valor da planilha na sincronização.
+function EditarLead({ lead, onCancelar, salvar }: {
+  lead: Lead; onCancelar: () => void; salvar: (dados: Record<string, string>) => Promise<string | null>;
+}) {
+  const [d, setD] = useState({
+    nome: lead.nome ?? "", telefone: lead.telefone ?? "", email: lead.email ?? "", cidade: lead.cidade ?? "",
+    valor: lead.valor_consorcio ?? (lead.valor_pretendido ? brl(Number(lead.valor_pretendido)) : ""),
+    renda: lead.renda ?? "", conhece_consorcio: lead.conhece_consorcio ?? "", interesse: lead.interesse ?? "",
+    observacoes: lead.observacoes ?? "",
+  });
+  const [erro, setErro] = useState("");
+  const [busy, setBusy] = useState(false);
+  const campo = (nome: keyof typeof d, rotulo: string, extra: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
+    <label>{rotulo}<input value={d[nome]} onChange={(e) => setD({ ...d, [nome]: e.target.value })} {...extra} /></label>
+  );
+
+  async function enviar(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    const msg = await salvar(d);
+    setBusy(false);
+    if (msg) setErro(msg);
+  }
+
+  return (
+    <form className="editar-lead" onSubmit={enviar}>
+      {campo("nome", "Nome", { required: true, maxLength: 120, autoFocus: true })}
+      {campo("telefone", "Telefone (com DDD)", { inputMode: "tel", maxLength: 20 })}
+      {campo("email", "E-mail", { type: "email", maxLength: 120 })}
+      {campo("cidade", "Cidade", { maxLength: 120 })}
+      {campo("valor", "Valor do consórcio", { maxLength: 60, placeholder: "Ex.: R$ 150.000" })}
+      {campo("renda", "Renda mensal", { maxLength: 120 })}
+      {campo("conhece_consorcio", "Conhece consórcio", { maxLength: 120 })}
+      {campo("interesse", "Interesse", { maxLength: 120, placeholder: "Imóvel, carro, moto…" })}
+      <label>Observações<textarea rows={3} maxLength={2000} value={d.observacoes} onChange={(e) => setD({ ...d, observacoes: e.target.value })} /></label>
+      <small style={{ color: "var(--muted)" }}>O que você corrigir aqui não volta ao valor da planilha.</small>
+      {erro && <small style={{ color: "#b4232c" }}>{erro}</small>}
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button type="button" className="btn secondary" onClick={onCancelar}>Cancelar</button>
+        <button className="btn" disabled={busy}>{busy ? "Salvando…" : "Salvar"}</button>
+      </div>
+    </form>
+  );
+}
+
+// Descartar (ou trocar o motivo): o motivo serve para ações futuras por tipo de insucesso.
+function DescarteModal({ lead, onClose, enviar }: {
+  lead: Lead; onClose: () => void; enviar: (corpo: Record<string, unknown>) => Promise<string | null>;
+}) {
+  const [motivo, setMotivo] = useState(lead.motivo_descarte ?? "");
+  const [obs, setObs] = useState(lead.descarte_obs ?? "");
+  const [erro, setErro] = useState("");
+  const [busy, setBusy] = useState(false);
+  const jaDescartado = lead.status === "descarte";
+
+  async function salvar(e: React.FormEvent) {
+    e.preventDefault();
+    if (!motivo) return setErro("Escolha o motivo do descarte.");
+    if (motivo === "outro" && !obs.trim()) return setErro("Conte qual foi o motivo.");
+    setBusy(true);
+    const msg = await enviar({ ...(jaDescartado ? {} : { status: "descarte" }), descarte: { motivo, obs } });
+    setBusy(false);
+    if (msg) setErro(msg);
+  }
+
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <form className="modal largo" onClick={(e) => e.stopPropagation()} onSubmit={salvar}>
+        <h3 style={{ margin: 0 }}>{jaDescartado ? "Motivo do descarte" : "Descartar lead"} — {lead.nome}</h3>
+        <div className="motivos" role="radiogroup" aria-label="Motivo do descarte">
+          {MOTIVOS_DESCARTE.map((m) => (
+            <label key={m.id} className={`motivo ${motivo === m.id ? "on" : ""}`}>
+              <input type="radio" name="motivo-descarte" checked={motivo === m.id} onChange={() => setMotivo(m.id)} />
+              {m.label}
+            </label>
+          ))}
+        </div>
+        <label style={{ display: "grid", gap: 6 }}>
+          <span className="det-label">{motivo === "outro" ? "Qual foi o motivo?" : "Observação (opcional)"}</span>
+          <textarea rows={2} maxLength={MAX_OBS_DESCARTE} value={obs} onChange={(e) => setObs(e.target.value)} />
+        </label>
+        {erro && <small style={{ color: "#b4232c" }}>{erro}</small>}
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button type="button" className="btn secondary" onClick={onClose}>Cancelar</button>
+          <button className="btn" disabled={busy}>{busy ? "Salvando…" : jaDescartado ? "Salvar" : "Descartar"}</button>
+        </div>
+      </form>
     </div>
   );
 }

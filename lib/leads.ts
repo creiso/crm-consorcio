@@ -249,6 +249,25 @@ export async function juntarComExistentes<T extends Chaveavel>(leads: T[]): Prom
   return leads;
 }
 
+// Campos corrigidos à mão no CRM não voltam ao valor da planilha: a linha vai com o valor que está no banco
+// (não dá para só tirar o campo: "nome" é obrigatório até numa linha que vai atualizar outra).
+const EDITAVEIS = ["nome", "telefone", "email", "cidade", "renda", "valor_consorcio", "valor_pretendido", "conhece_consorcio", "interesse", "observacoes"];
+
+export async function manterEdicoes<T extends { external_key: string }>(leads: T[]) {
+  const supa = db();
+  const porChave = new Map(leads.map((l) => [l.external_key, l]));
+  const chaves = [...porChave.keys()];
+  for (let i = 0; i < chaves.length; i += 200) {
+    const { data, error } = await supa.from("leads").select(`external_key, campos_editados, ${EDITAVEIS.join(", ")}`)
+      .in("external_key", chaves.slice(i, i + 200));
+    if (error) return; // SQL 019 ainda não rodou: segue como antes
+    for (const atual of (data ?? []) as unknown as Record<string, unknown>[]) {
+      const lead = porChave.get(String(atual.external_key)) as Record<string, unknown> | undefined;
+      for (const campo of (atual.campos_editados as string[] | null) ?? []) if (lead && EDITAVEIS.includes(campo)) lead[campo] = atual[campo];
+    }
+  }
+}
+
 export async function upsertLeads(rows: Row[], origem: string, distribuicao: Distribuicao) {
   const supa = db();
   const { data: vendedores } = await supa.from("vendedores").select("id, nome, email, equipe_id");
@@ -271,6 +290,7 @@ export async function upsertLeads(rows: Row[], origem: string, distribuicao: Dis
   await juntarComExistentes(leads);
   const unique = [...new Map(leads.map((l) => [l.external_key, l])).values()];
   if (!unique.length) return { recebidos: rows.length, gravados: 0, ignorados: rows.length };
+  await manterEdicoes(unique);
 
   // Upsert em lotes com as mesmas colunas: coluna ausente não apaga o que já está no banco
   // (planilha sem "vendedor" não tira o dono do lead; sem created_time mantém a data que já existe).

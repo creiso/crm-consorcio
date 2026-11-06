@@ -7,7 +7,7 @@ import Avatar from "./Avatar";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
-export const metadata = { title: "CRM Consórcio" };
+export const metadata = { title: "OnionCRM" };
 
 // na tela o papel "vendedor" do banco aparece como Consultor
 const NIVEL = { admin: "Administrador", coordenador: "Coordenador", vendedor: "Consultor" } as const;
@@ -25,7 +25,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         {perfil && (
           <nav className="nav">
-            <span className="marca">CRM Consórcio</span>
+            <span className="marca"><img src="/onioncrm.png" alt="OnionCRM" /></span>
             <div className="nav-links">
               {lider && <Link href="/">Dashboard</Link>}
               <Link href="/kanban">Kanban</Link>

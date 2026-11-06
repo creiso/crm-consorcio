@@ -1,8 +1,8 @@
 /* Placar para TV: tema escuro próprio, medidas em vh para escalar em qualquer tela. */
 .placar {
   --pl-bg: #0d0e10; --pl-card: #17181b; --pl-line: #26282d; --pl-text: #f0efec; --pl-muted: #a3a19a;
-  --pl-serie: #3987e5; --pl-ouro: #f5c242; --pl-prata: #c9ced6; --pl-bronze: #d08a4f; --pl-bom: #0ca30c;
-  position: fixed; inset: 0; z-index: 100; background: radial-gradient(1200px 600px at 50% -10%, #1b2433 0%, var(--pl-bg) 60%);
+  --pl-serie: #00d2e8; --pl-ouro: #f5c242; --pl-prata: #c9ced6; --pl-bronze: #d08a4f; --pl-bom: #19e07b;
+  position: fixed; inset: 0; z-index: 100; background: radial-gradient(1200px 600px at 50% -10%, #24104f 0%, var(--pl-bg) 60%);
   color: var(--pl-text); display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 2.5vh; padding: 3vh 3vw;
   overflow: hidden; font-size: 2vh; letter-spacing: -0.01em;
 }
@@ -45,7 +45,7 @@
 .p1 .pl-base { height: 8vh; color: var(--pl-ouro); }
 .p2 .pl-base { height: 5.5vh; }
 .p3 .pl-base { height: 3.5vh; }
-.pl-subiu { position: absolute; top: -1vh; right: 8%; background: var(--pl-bom); color: #fff; font-size: 1.6vh; font-weight: 700;
+.pl-subiu { position: absolute; top: -1vh; right: 8%; background: var(--pl-bom); color: #062a17; font-size: 1.6vh; font-weight: 700;
   padding: .3vh 1vh; border-radius: 2vh; animation: pl-entra .4s ease-out; z-index: 1; }
 .pl-subiu.mini { position: static; margin-left: 1vh; padding: .1vh .8vh; }
 
@@ -72,12 +72,12 @@
 .pl-eq:last-of-type { border-bottom: 0; }
 .pl-eq.minha { background: rgba(57, 135, 229, .12); border-radius: 1vh; padding: 1vh .8vw; margin: 0 -.8vw; }
 .pl-eq-pos { font-size: 2.2vh; font-weight: 700; color: var(--pl-muted); text-align: center; }
-.pl-eq-badge { width: 5vh; height: 5vh; border-radius: 1.2vh; background: #22324a; color: #9ec5f4; display: grid; place-items: center; font-weight: 800; font-size: 1.8vh; }
+.pl-eq-badge { width: 5vh; height: 5vh; border-radius: 1.2vh; background: #2a1858; color: #cdb8f7; display: grid; place-items: center; font-weight: 800; font-size: 1.8vh; }
 .pl-eq-nome { font-size: 2.2vh; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; }
 .pl-eq-valor { display: grid; text-align: right; font-size: 2.4vh; font-weight: 750; white-space: nowrap; }
 .pl-eq-valor small { font-size: 1.6vh; color: var(--pl-muted); font-weight: 500; }
-.pl-sub-equipe { margin-left: 1vh; background: #22324a; color: #9ec5f4; font-size: 1.7vh; font-weight: 700; padding: .3vh 1vh; border-radius: 2vh; }
-.pl-festa-equipe { font-size: 2.6vh; color: #9ec5f4; font-weight: 700; margin-top: -.6vh; }
+.pl-sub-equipe { margin-left: 1vh; background: #2a1858; color: #cdb8f7; font-size: 1.7vh; font-weight: 700; padding: .3vh 1vh; border-radius: 2vh; }
+.pl-festa-equipe { font-size: 2.6vh; color: #cdb8f7; font-weight: 700; margin-top: -.6vh; }
 .pl-select { font: inherit; font-size: 14px; background: #222429; color: var(--pl-text); border: 1px solid var(--pl-line); border-radius: 9px; padding: 8px 10px; width: auto; }
 .pl-venda { display: grid; grid-template-columns: 6vh minmax(0, 1fr) auto; gap: 1vw; align-items: center; padding: 1.1vh 0; border-bottom: 1px solid var(--pl-line); }
 .pl-venda:last-child { border-bottom: 0; }
@@ -126,3 +126,4 @@
   .pl-corpo { grid-template-columns: minmax(0, 1fr); }
   .pl-ultimas { display: none; }
 }
+.pl-logo { height: 4.6vh; width: auto; vertical-align: middle; margin-right: 1vh; }

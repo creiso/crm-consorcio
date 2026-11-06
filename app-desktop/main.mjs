@@ -14,6 +14,11 @@ const TENTAR_DE_NOVO_MS = 5000;
 const ZOOM_MAX = 3;
 const PERMISSOES = new Set(["fullscreen", "clipboard-sanitized-write"]); // o placar usa tela cheia
 
+// Até a versão 1.0 o app se chamava "CRM Consórcio": continua usando a mesma pasta de dados,
+// para ninguém precisar entrar de novo nem perder o tamanho da janela ao atualizar.
+// Com --user-data-dir (testes), vale a pasta pedida.
+if (!app.commandLine.hasSwitch("user-data-dir")) app.setPath("userData", join(app.getPath("appData"), "CRM Consórcio"));
+
 // O nome do programa tem acento e entraria na identificação enviada aos sites:
 // com isso o Turnstile não libera o login.
 app.userAgentFallback = app.userAgentFallback.replace(/\s\S*[^\x00-\x7f]\S*/g, "");
@@ -114,7 +119,7 @@ function abrirJanela() {
   const janela = new BrowserWindow({
     width: salva.width ?? 1280, height: salva.height ?? 800, x: salva.x, y: salva.y,
     minWidth: 380, minHeight: 500,
-    title: "CRM Consórcio", icon: ICONE, backgroundColor: "#f5f6f8",
+    title: "OnionCRM", icon: ICONE, backgroundColor: "#f5f6f8",
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   if (salva.maximizada) janela.maximize();
